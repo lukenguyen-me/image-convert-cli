@@ -49,11 +49,18 @@ async function convertImage(): Promise<void> {
     },
   });
 
+  // Step 4: Ask if user wants compression
+  const compress = await confirm({
+    message: "Do you want to compress the image?",
+    default: false,
+  });
+
   // Confirm before proceeding
   console.log("\nConversion settings:");
   console.log(`  Source: ${sourcePath}`);
   console.log(`  Target format: ${targetFormat.toUpperCase()}`);
   console.log(`  Destination: ${destinationPath}`);
+  console.log(`  Compression: ${compress ? "Yes" : "No"}`);
 
   const shouldProceed = await confirm({
     message: "Proceed with conversion?",
@@ -66,22 +73,20 @@ async function convertImage(): Promise<void> {
   }
 
   // Perform conversion
-  await performConversion(sourcePath, destinationPath, targetFormat);
+  await performConversion(sourcePath, destinationPath, targetFormat, compress);
 }
 
 async function performConversion(
   sourcePath: string,
   destinationPath: string,
   format: SupportedFormat,
+  compress: boolean = false,
 ): Promise<void> {
   console.log("\nConverting...");
 
   const startTime = Date.now();
 
   try {
-    // Get quality setting based on format
-    const quality = getQualityForFormat(format);
-
     // Determine output format for Sharp
     let sharpFormat: keyof sharp.FormatEnum;
     let options: sharp.JpegOptions | sharp.WebpOptions | sharp.OutputInfo;
@@ -89,12 +94,14 @@ async function performConversion(
     switch (format) {
       case "webp":
         sharpFormat = "webp";
-        options = { quality };
+        options = compress
+          ? { quality: 100, lossless: true }
+          : { quality: 100 };
         break;
       case "jpeg":
       case "jpg":
         sharpFormat = "jpeg";
-        options = { quality };
+        options = compress ? { quality: 100, mozjpeg: true } : { quality: 100 };
         break;
       default:
         throw new Error(`Unsupported format: ${format}`);
@@ -127,18 +134,6 @@ function getDefaultDestinationPath(
 ): string {
   const parsed = path.parse(sourcePath);
   return path.join(parsed.dir, `${parsed.name}.${format}`);
-}
-
-function getQualityForFormat(format: SupportedFormat): number {
-  switch (format) {
-    case "webp":
-      return 80;
-    case "jpeg":
-    case "jpg":
-      return 85;
-    default:
-      return 80;
-  }
 }
 
 function formatBytes(bytes: number): string {
