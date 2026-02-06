@@ -73,11 +73,57 @@ async function inputWithPathCompletion(
   });
 }
 
-async function convertImage(): Promise<void> {
+type ConvertOptions = {
+  help?: boolean;
+  yes?: boolean;
+  source?: string;
+  format?: SupportedFormat;
+  destination?: string;
+  compress?: boolean;
+};
+
+function showHelp(): void {
+  console.log(`Image Converter CLI
+
+Usage:
+  imgc [options]
+  imgc --source <path> --format <format> [options]
+  imgc -y --source <path> --format <format>
+
+Options:
+  --help, -h       Show this help message
+  --yes, -y        Non-interactive mode (use defaults for optional prompts)
+  --source, -s     Source file path (required with -y)
+  --format, -f     Target format: webp, jpeg, or jpg (required with -y)
+  --dest, -d       Destination path (optional, auto-generated if not provided)
+  --compress, -c  Enable compression (optional, default: false)
+
+Examples:
+  imgc                           # Interactive mode
+  imgc --help                    # Show help
+  imgc -y --source photo.png --format webp
+  imgc -y --source photo.jpg --format jpeg --compress
+`);
+}
+
+async function convertImage(options: ConvertOptions = {}): Promise<void> {
+  // Show help and exit if --help is passed
+  if (options.help) {
+    showHelp();
+    return;
+  }
+
+  // Validate required options in -y mode
+  if (options.yes && (!options.source || !options.format)) {
+    console.error("Error: -y mode requires --source and --format arguments");
+    showHelp();
+    return;
+  }
+
   console.log("Image Converter - Convert images to webp, jpeg, or jpg\n");
 
-  // Step 1: Get source file path
-  const sourcePath = await inputWithPathCompletion(
+  // Step 1: Get source file path (always required)
+  const sourcePath = options.source || await inputWithPathCompletion(
     "Source file path",
     undefined,
     (input) => {
@@ -91,8 +137,8 @@ async function convertImage(): Promise<void> {
     },
   );
 
-  // Step 2: Select target format
-  const targetFormat = await select<SupportedFormat>({
+  // Step 2: Select target format (required)
+  const targetFormat = options.format || await select<SupportedFormat>({
     message: "Target format:",
     choices: [
       { value: "webp", description: "WebP format (recommended for web)" },
@@ -101,9 +147,9 @@ async function convertImage(): Promise<void> {
     ],
   });
 
-  // Step 3: Get destination path
+  // Step 3: Get destination path (optional)
   const defaultDestName = getDefaultDestinationPath(sourcePath, targetFormat);
-  const destinationPath = await inputWithPathCompletion(
+  const destinationPath = options.destination || await inputWithPathCompletion(
     "Destination path",
     defaultDestName,
     (input) => {
@@ -118,20 +164,20 @@ async function convertImage(): Promise<void> {
     },
   );
 
-  // Step 4: Ask if user wants compression
-  const compress = await confirm({
+  // Step 4: Ask if user wants compression (skipped in -y mode)
+  const compress = options.yes ? false : await confirm({
     message: "Do you want to compress the image?",
     default: false,
   });
 
-  // Confirm before proceeding
+  // Step 5: Confirm before proceeding (skipped in -y mode)
   console.log("\nConversion settings:");
   console.log(`  Source: ${sourcePath}`);
   console.log(`  Target format: ${targetFormat.toUpperCase()}`);
   console.log(`  Destination: ${destinationPath}`);
   console.log(`  Compression: ${compress ? "Yes" : "No"}`);
 
-  const shouldProceed = await confirm({
+  const shouldProceed = options.yes ? true : await confirm({
     message: "Proceed with conversion?",
     default: true,
   });
