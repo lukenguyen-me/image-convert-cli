@@ -1,17 +1,86 @@
-import { input, select, confirm } from "@inquirer/prompts";
+import { select, confirm } from "@inquirer/prompts";
+import * as readline from "node:readline";
 import sharp from "sharp";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 type SupportedFormat = "webp" | "jpeg" | "jpg";
 
+function filePathCompleter(line: string): readline.CompleterResult {
+  const trimmed = line.trim();
+  const input = trimmed.split(" ")[0] || ".";
+
+  // Check if input ends with "/" - treat as directory
+  const isDirectoryInput = input.endsWith("/");
+  const dir = isDirectoryInput ? input.slice(0, -1) || "." : path.dirname(input) || ".";
+  const base = isDirectoryInput ? "" : (path.basename(input) || "");
+
+  try {
+    const files: fs.Dirent[] = fs.readdirSync(dir, { withFileTypes: true });
+
+    // If input is a directory (ends with /), show all files; otherwise filter by base
+    const filtered = base
+      ? files.filter((dirent) => dirent.name.startsWith(base))
+      : files;
+
+    const completions = filtered.map((dirent) => {
+      const fullPath = dir === "." ? dirent.name : `${dir}/${dirent.name}`;
+      return dirent.isDirectory() ? `${fullPath}/` : fullPath;
+    });
+
+    return [completions.length ? completions : [input], input];
+  } catch (error) {
+    return [[input], input];
+  }
+}
+
+/**
+ * Input prompt with tab completion for file paths
+ */
+async function inputWithPathCompletion(
+  message: string,
+  defaultValue?: string,
+  validate?: (input: string) => string | true,
+): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    completer: filePathCompleter,
+  });
+
+  const question = defaultValue
+    ? `${message} (${defaultValue}): `
+    : `${message}: `;
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      const result = answer.trim() || defaultValue || "";
+      rl.close();
+
+      if (validate) {
+        const validationResult = validate(result);
+        if (validationResult !== true) {
+          console.log(`\nError: ${validationResult}`);
+          inputWithPathCompletion(message, defaultValue, validate).then(
+            resolve,
+          );
+          return;
+        }
+      }
+
+      resolve(result);
+    });
+  });
+}
+
 async function convertImage(): Promise<void> {
   console.log("Image Converter - Convert images to webp, jpeg, or jpg\n");
 
   // Step 1: Get source file path
-  const sourcePath = await input({
-    message: "Source file path:",
-    validate: (input) => {
+  const sourcePath = await inputWithPathCompletion(
+    "Source file path",
+    undefined,
+    (input) => {
       if (!input.trim()) {
         return "Please enter a file path";
       }
@@ -20,7 +89,7 @@ async function convertImage(): Promise<void> {
       }
       return true;
     },
-  });
+  );
 
   // Step 2: Select target format
   const targetFormat = await select<SupportedFormat>({
@@ -34,10 +103,10 @@ async function convertImage(): Promise<void> {
 
   // Step 3: Get destination path
   const defaultDestName = getDefaultDestinationPath(sourcePath, targetFormat);
-  const destinationPath = await input({
-    message: "Destination path:",
-    default: defaultDestName,
-    validate: (input) => {
+  const destinationPath = await inputWithPathCompletion(
+    "Destination path",
+    defaultDestName,
+    (input) => {
       if (!input.trim()) {
         return "Please enter a destination path";
       }
@@ -47,7 +116,7 @@ async function convertImage(): Promise<void> {
       }
       return true;
     },
-  });
+  );
 
   // Step 4: Ask if user wants compression
   const compress = await confirm({
