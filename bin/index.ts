@@ -1,15 +1,7 @@
 #!/usr/bin/env bun
 
-import { convertImage } from "../src/index";
-
-type ConvertOptions = {
-  help?: boolean;
-  yes?: boolean;
-  source?: string;
-  format?: string;
-  destination?: string;
-  compress?: boolean;
-};
+import { runCli } from "../src/cli";
+import type { ConvertOptions } from "../src/types";
 
 const args = process.argv.slice(2);
 const options: ConvertOptions = {};
@@ -24,7 +16,10 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === "--source" || arg === "-s") {
     options.source = args[++i];
   } else if (arg === "--format" || arg === "-f") {
-    options.format = args[++i];
+    const format = args[++i] as "webp" | "jpeg" | "jpg" | undefined;
+    if (format && ["webp", "jpeg", "jpg"].includes(format)) {
+      options.format = format;
+    }
   } else if (arg === "--dest" || arg === "-d") {
     options.destination = args[++i];
   } else if (arg === "--compress" || arg === "-c") {
@@ -32,4 +27,4 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-convertImage(options);
+runCli(options);
