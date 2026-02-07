@@ -1,6 +1,4 @@
-import { test, expect, describe, it } from "bun:test";
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { expect, describe, it } from "bun:test";
 import { runCli } from "../src/cli";
 import { NoopPromptService } from "../src/prompts";
 
@@ -14,7 +12,11 @@ describe("cli", () => {
       // Mock console.log to capture help output
       const originalLog = console.log;
       console.log = (...args: unknown[]) => {
-        if (args[0] && typeof args[0] === "string" && args[0].includes("Image Converter CLI")) {
+        if (
+          args[0] &&
+          typeof args[0] === "string" &&
+          args[0].includes("Image Converter CLI")
+        ) {
           helpShown = true;
         }
         originalLog(...args);
@@ -32,7 +34,11 @@ describe("cli", () => {
 
       const originalError = console.error;
       console.error = (...args: unknown[]) => {
-        if (args[0] && typeof args[0] === "string" && args[0].includes("Error")) {
+        if (
+          args[0] &&
+          typeof args[0] === "string" &&
+          args[0].includes("Error")
+        ) {
           errorShown = true;
         }
         originalError(...args);

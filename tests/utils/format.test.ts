@@ -1,4 +1,4 @@
-import { test, expect, describe, it } from "bun:test";
+import { expect, describe, it } from "bun:test";
 import { formatBytes } from "../../src/utils/format";
 
 describe("formatBytes", () => {

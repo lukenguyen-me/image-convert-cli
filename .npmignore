@@ -1,0 +1,30 @@
+# git
+.gitignore
+.husky/
+.git
+
+# tests
+tests/
+*.test.ts
+
+# config
+tsconfig.json
+CLAUDE.md
+AGENTS.md
+
+# docs
+README.md
+example/
+
+# coverage
+coverage/
+*.lcov
+
+# misc
+.claude/
+.env*
+.eslintcache
+.cache
+.idea
+.DS_Store
+*.tgz

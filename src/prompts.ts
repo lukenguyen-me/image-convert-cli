@@ -125,6 +125,7 @@ export class InteractivePromptService implements IPromptService {
         { value: "webp", description: "WebP format (recommended for web)" },
         { value: "jpeg", description: "JPEG format" },
         { value: "jpg", description: "JPG format" },
+        { value: "png", description: "PNG format (lossless)" },
       ],
     });
   }
@@ -155,7 +156,7 @@ Options:
   --help, -h       Show this help message
   --yes, -y        Non-interactive mode (use defaults for optional prompts)
   --source, -s     Source file path (required with -y)
-  --format, -f     Target format: webp, jpeg, or jpg (required with -y)
+  --format, -f     Target format: webp, jpeg, jpg, or png (required with -y)
   --dest, -d       Destination path (optional, auto-generated if not provided)
   --compress, -c  Enable compression (optional, default: false)
 

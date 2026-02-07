@@ -16,8 +16,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === "--source" || arg === "-s") {
     options.source = args[++i];
   } else if (arg === "--format" || arg === "-f") {
-    const format = args[++i] as "webp" | "jpeg" | "jpg" | undefined;
-    if (format && ["webp", "jpeg", "jpg"].includes(format)) {
+    const format = args[++i] as "webp" | "jpeg" | "jpg" | "png" | undefined;
+    if (format && ["webp", "jpeg", "jpg", "png"].includes(format)) {
       options.format = format;
     }
   } else if (arg === "--dest" || arg === "-d") {

@@ -16,7 +16,7 @@ export async function convertImage(
 
     // Determine output format for Sharp
     let sharpFormat: keyof sharp.FormatEnum;
-    let options: sharp.JpegOptions | sharp.WebpOptions | sharp.OutputInfo;
+    let options: sharp.JpegOptions | sharp.WebpOptions | sharp.PngOptions | sharp.OutputInfo;
 
     switch (format) {
       case "webp":
@@ -29,6 +29,12 @@ export async function convertImage(
       case "jpg":
         sharpFormat = "jpeg";
         options = compress ? { quality: 100, mozjpeg: true } : { quality: 100 };
+        break;
+      case "png":
+        sharpFormat = "png";
+        options = compress
+          ? { compressionLevel: 9 }
+          : { compressionLevel: 6 };
         break;
       default:
         throw new Error(`Unsupported format: ${format}`);

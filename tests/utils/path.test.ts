@@ -1,4 +1,4 @@
-import { test, expect, describe, it } from "bun:test";
+import { expect, describe, it } from "bun:test";
 import { getDefaultDestinationPath } from "../../src/utils/path";
 
 describe("getDefaultDestinationPath", () => {
@@ -33,7 +33,10 @@ describe("getDefaultDestinationPath", () => {
   });
 
   it("should handle paths with multiple dots", () => {
-    const result = getDefaultDestinationPath("/path/to/image.v2.orig.png", "webp");
+    const result = getDefaultDestinationPath(
+      "/path/to/image.v2.orig.png",
+      "webp",
+    );
     expect(result).toBe("/path/to/image.v2.orig.webp");
   });
 });
