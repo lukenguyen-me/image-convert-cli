@@ -3,11 +3,17 @@
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "imgc": "./bin/index.ts"
+    "imgc": "./dist/index.js"
   },
   "scripts": {
     "start": "bun bin/index.ts",
-    "prepare": "husky"
+    "test": "bun test",
+    "prepare": "husky install",
+    "build": "bun build ./bin/index.ts --outdir ./dist --target bun",
+    "publish": "bun run build && bun publish --access public --ignore-scripts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
