@@ -45,6 +45,12 @@ export async function runCli(
     return;
   }
 
+  if (options.version) {
+    const version = process.env.npm_package_version || "1.1.0";
+    console.log(`image-convert-cli v${version}`);
+    return;
+  }
+
   if (options.yes && (!options.source || !options.format)) {
     console.error("Error: -y mode requires --source and --format arguments");
     prompts.showHelp();

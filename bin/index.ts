@@ -12,11 +12,18 @@ if (args[0] === "update") {
   process.exit(0);
 }
 
+// Check for version command (positional argument)
+if (args[0] === "version") {
+  options.version = true;
+}
+
 // Parse arguments
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
   if (arg === "--help" || arg === "-h") {
     options.help = true;
+  } else if (arg === "--version" || arg === "-v") {
+    options.version = true;
   } else if (arg === "--yes" || arg === "-y") {
     options.yes = true;
   } else if (arg === "--source" || arg === "-s") {

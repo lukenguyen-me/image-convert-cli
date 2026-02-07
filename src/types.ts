@@ -2,6 +2,7 @@ export type SupportedFormat = "webp" | "jpeg" | "jpg" | "png";
 
 export type ConvertOptions = {
   help?: boolean;
+  version?: boolean;
   yes?: boolean;
   source?: string;
   format?: SupportedFormat;

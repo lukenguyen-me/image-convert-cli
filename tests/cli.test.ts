@@ -110,4 +110,43 @@ describe("cli", () => {
       expect(errors.some(msg => msg.includes("Error"))).toBe(true);
     });
   });
+
+  describe("version", () => {
+    it("should display version when version option is true", async () => {
+      let versionOutput = "";
+
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string" && args[0].includes("image-convert-cli v")) {
+          versionOutput = args[0];
+        }
+        originalLog(...args);
+      };
+
+      await runCli({ version: true }, new NoopPromptService());
+
+      console.log = originalLog;
+
+      expect(versionOutput).toContain("image-convert-cli v");
+    });
+
+    it("should include version number in output", async () => {
+      let versionOutput = "";
+
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          versionOutput = args[0];
+        }
+        originalLog(...args);
+      };
+
+      await runCli({ version: true }, new NoopPromptService());
+
+      console.log = originalLog;
+
+      // Should contain a version pattern like v1.0.0
+      expect(versionOutput).toMatch(/image-convert-cli v\d+\.\d+\.\d+/);
+    });
+  });
 });

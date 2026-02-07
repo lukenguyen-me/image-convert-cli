@@ -152,21 +152,25 @@ Usage:
   imgc --source <path> --format <format> [options]
   imgc -y --source <path> --format <format>
   imgc update                     # Check for updates
+  imgc version                    # Show version
 
 Options:
   --help, -h       Show this help message
+  --version, -v    Show version number
   --yes, -y        Non-interactive mode (use defaults for optional prompts)
   --source, -s     Source file path (required with -y)
   --format, -f     Target format: webp, jpeg, jpg, or png (required with -y)
   --dest, -d       Destination path (optional, auto-generated if not provided)
-  --compress, -c  Enable compression (optional, default: false)
+  --compress, -c   Enable compression (optional, default: false)
 
 Commands:
   update              Check for the latest version on npm
+  version             Show version number
 
 Examples:
   imgc                           # Interactive mode
   imgc --help                    # Show help
+  imgc --version                 # Show version
   imgc -y --source photo.png --format webp
   imgc -y --source photo.jpg --format jpeg --compress
   imgc update                    # Check for updates
