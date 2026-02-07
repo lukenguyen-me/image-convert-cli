@@ -1,12 +1,12 @@
 # image-convert-cli
 
-> A fast, interactive CLI tool for converting images between WebP, JPEG, and JPG formats
+> A fast, interactive CLI tool for converting images between WebP, JPEG, JPG and PNG formats
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Demo
 
-<video src="assets/demo.mp4" width="100%" autoplay loop muted playsinline></video>
+https://github.com/user-attachments/assets/f3df2efc-5db7-4201-9092-1aa309880380
 
 ## Quick Start
 
@@ -181,8 +181,6 @@ interface ConversionResult {
   error?: string;
 }
 ```
-
-See `CLAUDE.md` for detailed development workflow including TDD practices.
 
 ## Contributing
 
