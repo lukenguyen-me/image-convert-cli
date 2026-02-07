@@ -4,6 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Demo
+
+<video src="assets/demo.mp4" width="100%" autoplay loop muted playsinline></video>
+
 ## Quick Start
 
 ```bash
