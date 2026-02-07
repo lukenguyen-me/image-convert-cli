@@ -1,10 +1,16 @@
 #!/usr/bin/env bun
 
-import { runCli } from "../src/cli";
+import { runCli, handleUpdate } from "../src/cli";
 import type { ConvertOptions } from "../src/types";
 
 const args = process.argv.slice(2);
 const options: ConvertOptions = {};
+
+// Check for update command (positional argument)
+if (args[0] === "update") {
+  await handleUpdate();
+  process.exit(0);
+}
 
 // Parse arguments
 for (let i = 0; i < args.length; i++) {

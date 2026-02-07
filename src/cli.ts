@@ -3,6 +3,37 @@ import { IPromptService, InteractivePromptService } from "./prompts";
 import { convertImage, displayConversionResult } from "./converter";
 import { getDefaultDestinationPath } from "./utils/path";
 
+const NPM_REGISTRY_URL = "https://registry.npmjs.org/image-convert-cli/latest";
+
+export async function handleUpdate(
+  fetchVersion?: () => Promise<string>,
+  currentVersion?: string,
+): Promise<void> {
+  const fetcher = fetchVersion || (async () => {
+    const response = await fetch(NPM_REGISTRY_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch version: ${response.statusText}`);
+    }
+    const data = await response.json() as { version: string };
+    return data.version;
+  });
+
+  const version = currentVersion || process.env.npm_package_version || "1.1.0";
+
+  try {
+    const latestVersion = await fetcher();
+
+    if (latestVersion === version) {
+      console.log(`You are running the latest version: ${version}`);
+    } else {
+      console.log(`Update available: ${version} -> ${latestVersion}`);
+      console.log("Run: bun update to upgrade");
+    }
+  } catch (error) {
+    console.error(`Error checking for updates: ${(error as Error).message}`);
+  }
+}
+
 export async function runCli(
   options: ConvertOptions,
   promptService?: IPromptService,

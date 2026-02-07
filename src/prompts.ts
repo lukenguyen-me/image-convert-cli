@@ -151,6 +151,7 @@ Usage:
   imgc [options]
   imgc --source <path> --format <format> [options]
   imgc -y --source <path> --format <format>
+  imgc update                     # Check for updates
 
 Options:
   --help, -h       Show this help message
@@ -160,11 +161,15 @@ Options:
   --dest, -d       Destination path (optional, auto-generated if not provided)
   --compress, -c  Enable compression (optional, default: false)
 
+Commands:
+  update              Check for the latest version on npm
+
 Examples:
   imgc                           # Interactive mode
   imgc --help                    # Show help
   imgc -y --source photo.png --format webp
   imgc -y --source photo.jpg --format jpeg --compress
+  imgc update                    # Check for updates
 `);
   }
 
