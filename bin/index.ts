@@ -8,7 +8,8 @@ const options: ConvertOptions = {};
 
 // Check for update command (positional argument)
 if (args[0] === "update") {
-  await handleUpdate();
+  const autoUpdate = args.includes("--yes") || args.includes("-y");
+  await handleUpdate(undefined, undefined, autoUpdate);
   process.exit(0);
 }
 

@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 import type { ConvertOptions } from "./types";
 import { IPromptService, InteractivePromptService } from "./prompts";
 import { convertImage, displayConversionResult, convertBatch, displayBatchResult } from "./converter";
@@ -7,9 +8,56 @@ import type { BatchConversionSettings } from "./types";
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org/image-convert-cli/latest";
 
+export async function executeUpdate(): Promise<void> {
+  return new Promise((resolve) => {
+    console.log("Updating image-convert-cli...");
+
+    const child = spawn("bun", ["add", "-g", "image-convert-cli"], {
+      stdio: ["inherit", "pipe", "pipe"],
+    });
+
+    child.stdout?.on("data", (data) => {
+      process.stdout.write(data);
+    });
+
+    child.stderr?.on("data", (data) => {
+      process.stderr.write(data);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        console.log("Update completed successfully.");
+      } else {
+        console.error(`Update failed with exit code: ${code}`);
+      }
+      resolve();
+    });
+
+    child.on("error", (error) => {
+      console.error(`Update failed: ${error.message}`);
+      resolve();
+    });
+  });
+}
+
+export async function promptForUpdate(
+  latestVersion: string,
+  promptService?: IPromptService,
+): Promise<boolean> {
+  const prompts = promptService || new InteractivePromptService();
+  return prompts.promptConfirm({
+    sourcePath: "",
+    targetFormat: "webp",
+    destinationPath: "",
+    compress: false,
+  });
+}
+
 export async function handleUpdate(
   fetchVersion?: () => Promise<string>,
   currentVersion?: string,
+  autoUpdate?: boolean,
+  promptService?: IPromptService,
 ): Promise<void> {
   const fetcher = fetchVersion || (async () => {
     const response = await fetch(NPM_REGISTRY_URL);
@@ -29,7 +77,17 @@ export async function handleUpdate(
       console.log(`You are running the latest version: ${version}`);
     } else {
       console.log(`Update available: ${version} -> ${latestVersion}`);
-      console.log("Run: bun update to upgrade");
+
+      if (autoUpdate) {
+        await executeUpdate();
+      } else {
+        const shouldUpdate = await promptForUpdate(latestVersion, promptService);
+        if (shouldUpdate) {
+          await executeUpdate();
+        } else {
+          console.log("Update cancelled.");
+        }
+      }
     }
   } catch (error) {
     console.error(`Error checking for updates: ${(error as Error).message}`);

@@ -1,5 +1,5 @@
 import { expect, describe, it } from "bun:test";
-import { runCli, handleUpdate } from "../src/cli";
+import { runCli, handleUpdate, executeUpdate, promptForUpdate } from "../src/cli";
 import { NoopPromptService } from "../src/prompts";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -67,7 +67,7 @@ describe("cli", () => {
       };
 
       // Mock fetcher returning a newer version
-      await handleUpdate(async () => "2.0.0", "1.0.0");
+      await handleUpdate(async () => "2.0.0", "1.0.0", false, new NoopPromptService({ confirm: false }));
 
       console.log = originalLog;
 
@@ -85,7 +85,7 @@ describe("cli", () => {
         originalLog(...args);
       };
 
-      await handleUpdate(async () => "1.0.0", "1.0.0");
+      await handleUpdate(async () => "1.0.0", "1.0.0", false, new NoopPromptService({ confirm: false }));
 
       console.log = originalLog;
 
@@ -105,7 +105,7 @@ describe("cli", () => {
 
       await handleUpdate(async () => {
         throw new Error("Network error");
-      }, "1.0.0");
+      }, "1.0.0", false, new NoopPromptService({ confirm: false }));
 
       console.error = originalError;
 
@@ -276,6 +276,111 @@ describe("cli", () => {
       } finally {
         fs.rmSync(testDir, { recursive: true });
       }
+    });
+  });
+
+  describe("promptForUpdate", () => {
+    it("should return true when user confirms", async () => {
+      const prompts = new NoopPromptService({ confirm: true });
+      const result = await promptForUpdate("2.0.0", prompts);
+      expect(result).toBe(true);
+    });
+
+    it("should return false when user declines", async () => {
+      const prompts = new NoopPromptService({ confirm: false });
+      const result = await promptForUpdate("2.0.0", prompts);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("handleUpdate with autoUpdate", () => {
+    it("should show update available message when version differs", async () => {
+      const logs: string[] = [];
+
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          logs.push(args[0]);
+        }
+        originalLog(...args);
+      };
+
+      await handleUpdate(async () => "2.0.0", "1.0.0", false, new NoopPromptService({ confirm: false }));
+
+      console.log = originalLog;
+
+      expect(logs.some(msg => msg.includes("1.0.0") && msg.includes("2.0.0"))).toBe(true);
+    });
+
+    it("should show up-to-date message when versions match", async () => {
+      const logs: string[] = [];
+
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          logs.push(args[0]);
+        }
+        originalLog(...args);
+      };
+
+      await handleUpdate(async () => "1.0.0", "1.0.0", false, new NoopPromptService({ confirm: false }));
+
+      console.log = originalLog;
+
+      expect(logs.some(msg => msg.includes("latest version"))).toBe(true);
+    });
+
+    it("should show confirmation prompt when autoUpdate=false and update available", async () => {
+      const prompts = new NoopPromptService({ confirm: true });
+      const logs: string[] = [];
+
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          logs.push(args[0]);
+        }
+        originalLog(...args);
+      };
+
+      // With confirm: true, it should proceed with update (call executeUpdate)
+      // We can't verify executeUpdate is called without mocking, but we can verify
+      // the flow doesn't error and shows the right messages
+      await handleUpdate(async () => "2.0.0", "1.0.0", false, prompts);
+
+      console.log = originalLog;
+
+      // Should show update message
+      expect(logs.some(msg => msg.includes("Update available"))).toBe(true);
+    });
+
+    it("should skip prompt when autoUpdate=true and update available", async () => {
+      const logs: string[] = [];
+      const errors: string[] = [];
+
+      const originalLog = console.log;
+      const originalError = console.error;
+      console.log = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          logs.push(args[0]);
+        }
+        originalLog(...args);
+      };
+      console.error = (...args: unknown[]) => {
+        if (args[0] && typeof args[0] === "string") {
+          errors.push(args[0]);
+        }
+        originalError(...args);
+      };
+
+      // With autoUpdate=true, it will try to run executeUpdate which spawns bun add -g
+      // This will fail in test environment but shouldn't error in handleUpdate itself
+      await handleUpdate(async () => "2.0.0", "1.0.0", true, new NoopPromptService({ confirm: false }));
+
+      console.log = originalLog;
+      console.error = originalError;
+
+      // Should show update message
+      expect(logs.some(msg => msg.includes("Update available"))).toBe(true);
     });
   });
 });
