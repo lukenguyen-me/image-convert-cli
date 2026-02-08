@@ -72,6 +72,9 @@ export interface IPromptService {
   promptFormat(): Promise<SupportedFormat>;
   promptCompress(): Promise<boolean>;
   promptConfirm(settings: ConversionSettings): Promise<boolean>;
+  promptForOverwrite(filePath: string): Promise<boolean>;
+  promptBatchDestination(defaultPath: string, validate?: (path: string) => string | true): Promise<string>;
+  promptBatchConfirm(fileCount: number): Promise<boolean>;
   showHelp(): void;
   showSettings(settings: ConversionSettings): void;
   showResult(result: { success: boolean; destinationPath: string; elapsed: number; originalSize: number; outputSize: number; error?: string }): void;
@@ -144,6 +147,40 @@ export class InteractivePromptService implements IPromptService {
     });
   }
 
+  async promptForOverwrite(filePath: string): Promise<boolean> {
+    return confirm({
+      message: `File ${filePath} already exists. Overwrite?`,
+      default: false,
+    });
+  }
+
+  async promptBatchDestination(
+    defaultPath: string,
+    validate?: (path: string) => string | true,
+  ): Promise<string> {
+    return inputWithPathCompletion(
+      "Output directory",
+      defaultPath,
+      validate ||
+        ((input) => {
+          if (!input.trim()) {
+            return "Please enter an output directory";
+          }
+          if (!fs.existsSync(input)) {
+            return "Output directory does not exist";
+          }
+          return true;
+        }),
+    );
+  }
+
+  async promptBatchConfirm(fileCount: number): Promise<boolean> {
+    return confirm({
+      message: `Convert ${fileCount} files?`,
+      default: true,
+    });
+  }
+
   showHelp(): void {
     console.log(`Image Converter CLI
 
@@ -205,6 +242,9 @@ export class NoopPromptService implements IPromptService {
     format?: SupportedFormat;
     compress?: boolean;
     confirm?: boolean;
+    overwrite?: boolean;
+    batchDestination?: string;
+    batchConfirm?: boolean;
   };
 
   constructor(responses?: {
@@ -213,6 +253,9 @@ export class NoopPromptService implements IPromptService {
     format?: SupportedFormat;
     compress?: boolean;
     confirm?: boolean;
+    overwrite?: boolean;
+    batchDestination?: string;
+    batchConfirm?: boolean;
   }) {
     this.responses = responses || {};
   }
@@ -235,6 +278,18 @@ export class NoopPromptService implements IPromptService {
 
   async promptConfirm(): Promise<boolean> {
     return this.responses.confirm ?? true;
+  }
+
+  async promptForOverwrite(): Promise<boolean> {
+    return this.responses.overwrite ?? false;
+  }
+
+  async promptBatchDestination(defaultPath: string): Promise<string> {
+    return this.responses.batchDestination || defaultPath;
+  }
+
+  async promptBatchConfirm(): Promise<boolean> {
+    return this.responses.batchConfirm ?? true;
   }
 
   showHelp(): void {}

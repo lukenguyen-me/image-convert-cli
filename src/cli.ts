@@ -1,7 +1,9 @@
+import * as path from "node:path";
 import type { ConvertOptions } from "./types";
 import { IPromptService, InteractivePromptService } from "./prompts";
-import { convertImage, displayConversionResult } from "./converter";
-import { getDefaultDestinationPath } from "./utils/path";
+import { convertImage, displayConversionResult, convertBatch, displayBatchResult } from "./converter";
+import { getDefaultDestinationPath, isDirectory, getImageFilesFromDirectory } from "./utils/path";
+import type { BatchConversionSettings } from "./types";
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org/image-convert-cli/latest";
 
@@ -64,6 +66,15 @@ export async function runCli(
   const targetFormat =
     options.format || (await prompts.promptFormat());
 
+  // Check if source is a directory (batch mode)
+  const isBatchMode = isDirectory(sourcePath);
+
+  if (isBatchMode) {
+    await runBatchMode(sourcePath, targetFormat, options, prompts);
+    return;
+  }
+
+  // Single file conversion
   const destinationPath =
     options.destination ||
     (await prompts.promptDestination(
@@ -102,4 +113,41 @@ export async function runCli(
   if (!result.success) {
     process.exit(1);
   }
+}
+
+async function runBatchMode(
+  sourceDir: string,
+  targetFormat: string,
+  options: ConvertOptions,
+  prompts: IPromptService,
+): Promise<void> {
+  const yesMode = options.yes === true;
+
+  // Get destination directory - default to same as source
+  const destinationDir = options.destination || (yesMode ? sourceDir : await prompts.promptBatchDestination(sourceDir));
+
+  const compress = yesMode ? false : await prompts.promptCompress();
+
+  // Count files to convert
+  const files = getImageFilesFromDirectory(sourceDir);
+
+  // In non-yes mode, show batch confirmation
+  if (!yesMode) {
+    const shouldProceed = await prompts.promptBatchConfirm(files.length);
+    if (!shouldProceed) {
+      console.log("Batch conversion cancelled.");
+      return;
+    }
+  }
+
+  const batchSettings: BatchConversionSettings = {
+    sourceDir,
+    targetFormat: targetFormat as any,
+    destinationDir,
+    compress,
+    yesMode,
+  };
+
+  const result = await convertBatch(batchSettings);
+  displayBatchResult(result);
 }
