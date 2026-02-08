@@ -5,6 +5,7 @@ import { IPromptService, InteractivePromptService } from "./prompts";
 import { convertImage, displayConversionResult, convertBatch, displayBatchResult } from "./converter";
 import { getDefaultDestinationPath, isDirectory, getImageFilesFromDirectory } from "./utils/path";
 import type { BatchConversionSettings } from "./types";
+import packageJson from "../package.json" with { type: "json" };
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org/image-convert-cli/latest";
 
@@ -68,7 +69,7 @@ export async function handleUpdate(
     return data.version;
   });
 
-  const version = currentVersion || process.env.npm_package_version || "1.1.0";
+  const version = currentVersion || process.env.npm_package_version || packageJson.version;
 
   try {
     const latestVersion = await fetcher();
@@ -106,7 +107,7 @@ export async function runCli(
   }
 
   if (options.version) {
-    const version = process.env.npm_package_version || "1.1.0";
+    const version = process.env.npm_package_version || packageJson.version;
     console.log(`image-convert-cli v${version}`);
     return;
   }
