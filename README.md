@@ -6,7 +6,7 @@
 
 ## Demo
 
-https://github.com/user-attachments/assets/f3df2efc-5db7-4201-9092-1aa309880380
+[![Demo Video](https://github.com/user-attachments/assets/f3df2efc-5db7-4201-9092-1aa309880380)](https://github.com/user-attachments/assets/f3df2efc-5db7-4201-9092-1aa309880380)
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ bun install -g image-convert-cli
 ### From Source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/lukenguyen-me/image-convert-cli
 cd image-convert-cli
 npm install  # or pnpm/yarn/bun install
 npm link     # or equivalent for your package manager
