@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-02-13
+
+### Added
+- SVG support as input format with automatic resize handling
+- Tilde (~) expansion for home directory in file paths
+- CHANGELOG for version tracking
+- Test coverage script (`bun run test:coverage`)
+
+### Tests
+- Unit tests for SVG conversion
+- Unit tests for path completion with tilde expansion
+
 ## [1.1.6] - 2026-02-13
 
 ### Added
