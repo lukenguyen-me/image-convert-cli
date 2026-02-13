@@ -33,7 +33,7 @@ export function isSameFormat(sourcePath: string, targetFormat: SupportedFormat):
   return false;
 }
 
-const SUPPORTED_FORMATS = ["webp", "jpeg", "jpg", "png"];
+export const INPUT_FORMATS = ["webp", "jpeg", "jpg", "png", "svg"];
 
 export function getImageFilesFromDirectory(dirPath: string): string[] {
   try {
@@ -41,7 +41,7 @@ export function getImageFilesFromDirectory(dirPath: string): string[] {
     return entries
       .filter((entry) => entry.isFile())
       .map((entry) => path.join(dirPath, entry.name))
-      .filter((filePath) => SUPPORTED_FORMATS.includes(getExtension(filePath)));
+      .filter((filePath) => INPUT_FORMATS.includes(getExtension(filePath)));
   } catch {
     return [];
   }

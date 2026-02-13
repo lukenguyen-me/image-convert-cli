@@ -9,6 +9,7 @@
   "scripts": {
     "start": "bun bin/index.ts",
     "test": "bun test",
+    "test:coverage": "bun test --coverage",
     "prepare": "husky install",
     "build": "bun build ./bin/index.ts --outdir ./dist --target bun",
     "publish": "bun run build && bun publish --access public --ignore-scripts"

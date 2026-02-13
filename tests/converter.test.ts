@@ -268,6 +268,71 @@ describe("convertBatch", () => {
     fs.rmSync(sourceDir, { recursive: true });
     fs.rmSync(destDir, { recursive: true });
   });
+
+  it("should convert svg to png successfully", async () => {
+    const sourcePath = path.join(__dirname, "fixtures", "test.svg");
+    const destPath = path.join(__dirname, "fixtures", "test_svg_output.png");
+
+    // Skip if no SVG fixture available
+    if (!fs.existsSync(sourcePath)) {
+      return;
+    }
+
+    const result = await convertImage(sourcePath, destPath, "png", false);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(fs.existsSync(destPath)).toBe(true);
+
+    // Cleanup
+    if (fs.existsSync(destPath)) {
+      fs.unlinkSync(destPath);
+    }
+  });
+
+  it("should convert svg to webp successfully", async () => {
+    const sourcePath = path.join(__dirname, "fixtures", "test.svg");
+    const destPath = path.join(__dirname, "fixtures", "test_svg_output.webp");
+
+    if (!fs.existsSync(sourcePath)) {
+      return;
+    }
+
+    const result = await convertImage(sourcePath, destPath, "webp", false);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(destPath)).toBe(true);
+
+    // Cleanup
+    if (fs.existsSync(destPath)) {
+      fs.unlinkSync(destPath);
+    }
+  });
+
+  it("should include svg files in batch conversion", async () => {
+    const sourceDir = path.join(__dirname, "fixtures", "batch_with_svg");
+    const destDir = path.join(__dirname, "fixtures", "batch_with_svg_dest");
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.mkdirSync(destDir, { recursive: true });
+
+    // Create test SVG file
+    const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>';
+    fs.writeFileSync(path.join(sourceDir, "image.svg"), svgContent);
+
+    const result = await convertBatch({
+      sourceDir,
+      targetFormat: "png",
+      destinationDir: destDir,
+      compress: false,
+      yesMode: true,
+    });
+
+    expect(result.successCount).toBe(1);
+
+    // Cleanup
+    fs.rmSync(sourceDir, { recursive: true });
+    fs.rmSync(destDir, { recursive: true });
+  });
 });
 
 describe("displayBatchResult", () => {

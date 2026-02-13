@@ -1,18 +1,27 @@
 import * as readline from "node:readline";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
 import type { SupportedFormat, ConversionSettings } from "./types";
-import { getDefaultDestinationPath } from "./utils/path";
 import { displayConversionResult } from "./converter";
 
-function filePathCompleter(line: string): readline.CompleterResult {
+export function filePathCompleter(line: string): readline.CompleterResult {
   const trimmed = line.trim();
   const input = trimmed.split(" ")[0] || ".";
 
   const isDirectoryInput = input.endsWith("/");
-  const dir = isDirectoryInput ? input.slice(0, -1) || "." : path.dirname(input) || ".";
-  const base = isDirectoryInput ? "" : (path.basename(input) || "");
+  let dir = isDirectoryInput
+    ? input.slice(0, -1) || "."
+    : path.dirname(input) || ".";
+
+  // Expand tilde to home directory
+  if (dir === "~" || dir.startsWith("~/")) {
+    const homeDir = os.homedir();
+    dir = dir === "~" ? homeDir : homeDir + dir.slice(1);
+  }
+
+  const base = isDirectoryInput ? "" : path.basename(input) || "";
 
   try {
     const files: fs.Dirent[] = fs.readdirSync(dir, { withFileTypes: true });
@@ -56,7 +65,9 @@ async function inputWithPathCompletion(
         const validationResult = validate(result);
         if (validationResult !== true) {
           console.log(`\nError: ${validationResult}`);
-          inputWithPathCompletion(message, defaultValue, validate).then(resolve);
+          inputWithPathCompletion(message, defaultValue, validate).then(
+            resolve,
+          );
           return;
         }
       }
@@ -68,16 +79,29 @@ async function inputWithPathCompletion(
 
 export interface IPromptService {
   promptSourceFile(validate?: (path: string) => string | true): Promise<string>;
-  promptDestination(defaultPath: string, validate?: (path: string) => string | true): Promise<string>;
+  promptDestination(
+    defaultPath: string,
+    validate?: (path: string) => string | true,
+  ): Promise<string>;
   promptFormat(): Promise<SupportedFormat>;
   promptCompress(): Promise<boolean>;
   promptConfirm(settings: ConversionSettings): Promise<boolean>;
   promptForOverwrite(filePath: string): Promise<boolean>;
-  promptBatchDestination(defaultPath: string, validate?: (path: string) => string | true): Promise<string>;
+  promptBatchDestination(
+    defaultPath: string,
+    validate?: (path: string) => string | true,
+  ): Promise<string>;
   promptBatchConfirm(fileCount: number): Promise<boolean>;
   showHelp(): void;
   showSettings(settings: ConversionSettings): void;
-  showResult(result: { success: boolean; destinationPath: string; elapsed: number; originalSize: number; outputSize: number; error?: string }): void;
+  showResult(result: {
+    success: boolean;
+    destinationPath: string;
+    elapsed: number;
+    originalSize: number;
+    outputSize: number;
+    error?: string;
+  }): void;
 }
 
 export class InteractivePromptService implements IPromptService {
@@ -197,6 +221,7 @@ Options:
   --yes, -y        Non-interactive mode (use defaults for optional prompts)
   --source, -s     Source file path (required with -y)
   --format, -f     Target format: webp, jpeg, jpg, or png (required with -y)
+                   Input formats: webp, jpeg, jpg, png, svg
   --dest, -d       Destination path (optional, auto-generated if not provided)
   --compress, -c   Enable compression (optional, default: false)
 
@@ -222,7 +247,14 @@ Examples:
     console.log(`  Compression: ${settings.compress ? "Yes" : "No"}`);
   }
 
-  showResult(result: { success: boolean; destinationPath: string; elapsed: number; originalSize: number; outputSize: number; error?: string }): void {
+  showResult(result: {
+    success: boolean;
+    destinationPath: string;
+    elapsed: number;
+    originalSize: number;
+    outputSize: number;
+    error?: string;
+  }): void {
     displayConversionResult({
       success: result.success,
       sourcePath: "",

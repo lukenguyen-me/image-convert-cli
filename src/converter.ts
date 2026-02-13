@@ -12,6 +12,7 @@ import {
   getImageFilesFromDirectory,
   isSameFormat,
   ensureDirectoryExists,
+  getExtension,
 } from "./utils/path";
 
 export async function convertImage(
@@ -52,7 +53,14 @@ export async function convertImage(
     }
 
     // Perform the conversion
-    await sharp(sourcePath)
+    let sharpInstance = sharp(sourcePath);
+
+    // For SVG input, resize to get proper output dimensions
+    if (getExtension(sourcePath) === "svg") {
+      sharpInstance = sharpInstance.resize(512, 512, { fit: "inside" });
+    }
+
+    await sharpInstance
       .toFormat(sharpFormat, options)
       .toFile(destinationPath);
 

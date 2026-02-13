@@ -118,7 +118,7 @@ export async function runCli(
     return;
   }
 
-  console.log("Image Converter - Convert images to webp, jpeg, or jpg\n");
+  console.log("Image Converter - Convert images between webp, jpeg, jpg, png, and svg\n");
 
   const sourcePath = options.source || await prompts.promptSourceFile();
 
