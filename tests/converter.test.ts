@@ -361,3 +361,47 @@ describe("displayBatchResult", () => {
     expect(logOutput).toContain("Total files: 2");
   });
 });
+
+describe("ICO conversion", () => {
+  const onePixelPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+    "base64",
+  );
+
+  it("should convert png to ico successfully", async () => {
+    const sourcePath = path.join(__dirname, "fixtures", "test_ico_source.png");
+    const destPath = path.join(__dirname, "fixtures", "test_output.ico");
+    fs.writeFileSync(sourcePath, onePixelPng);
+    const result = await convertImage(sourcePath, destPath, "ico", false);
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(fs.existsSync(destPath)).toBe(true);
+    [sourcePath, destPath].forEach((p) => { if (fs.existsSync(p)) fs.unlinkSync(p); });
+  });
+
+  it("should produce a valid ICO file with non-zero output size", async () => {
+    const sourcePath = path.join(__dirname, "fixtures", "test_ico_size.png");
+    const destPath = path.join(__dirname, "fixtures", "test_size_output.ico");
+    fs.writeFileSync(sourcePath, onePixelPng);
+    const result = await convertImage(sourcePath, destPath, "ico", false);
+    expect(result.success).toBe(true);
+    expect(result.outputSize).toBeGreaterThan(0);
+    [sourcePath, destPath].forEach((p) => { if (fs.existsSync(p)) fs.unlinkSync(p); });
+  });
+
+  it("should silently ignore compress flag for ICO", async () => {
+    const sourcePath = path.join(__dirname, "fixtures", "test_ico_compress.png");
+    const destPath = path.join(__dirname, "fixtures", "test_compress_output.ico");
+    fs.writeFileSync(sourcePath, onePixelPng);
+    const result = await convertImage(sourcePath, destPath, "ico", true);
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    [sourcePath, destPath].forEach((p) => { if (fs.existsSync(p)) fs.unlinkSync(p); });
+  });
+
+  it("should return success=false for non-existent source", async () => {
+    const result = await convertImage("/non/existent/path.png", "/tmp/out.ico", "ico", false);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+});

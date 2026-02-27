@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import ico from "sharp-ico";
 import * as fs from "node:fs";
 import type {
   ConversionResult,
@@ -25,6 +26,23 @@ export async function convertImage(
 
   try {
     const originalSize = fs.statSync(sourcePath).size;
+
+    if (format === "ico") {
+      let sharpInstance = sharp(sourcePath);
+      if (getExtension(sourcePath) === "svg") {
+        sharpInstance = sharpInstance.resize(512, 512, { fit: "inside" });
+      }
+      await ico.sharpsToIco([sharpInstance], destinationPath, { sizes: [32, 16] });
+      const outputSize = fs.statSync(destinationPath).size;
+      return {
+        success: true,
+        sourcePath,
+        destinationPath,
+        originalSize,
+        outputSize,
+        elapsed: Date.now() - startTime,
+      };
+    }
 
     // Determine output format for Sharp
     let sharpFormat: keyof sharp.FormatEnum;

@@ -1,4 +1,4 @@
-export type SupportedFormat = "webp" | "jpeg" | "jpg" | "png";
+export type SupportedFormat = "webp" | "jpeg" | "jpg" | "png" | "ico";
 
 export type ConvertOptions = {
   help?: boolean;

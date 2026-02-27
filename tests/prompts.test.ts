@@ -45,6 +45,11 @@ describe("NoopPromptService", () => {
     await expect(prompts.promptBatchConfirm()).resolves.toBe(false);
   });
 
+  it("should return ico format when configured", async () => {
+    const prompts = new NoopPromptService({ format: "ico" });
+    await expect(prompts.promptFormat()).resolves.toBe("ico");
+  });
+
   it("should not throw for show methods", () => {
     const prompts = new NoopPromptService();
     prompts.showHelp();

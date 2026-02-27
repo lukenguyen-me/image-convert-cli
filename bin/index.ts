@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { runCli, handleUpdate } from "../src/cli";
-import type { ConvertOptions } from "../src/types";
+import type { ConvertOptions, SupportedFormat } from "../src/types";
 
 const args = process.argv.slice(2);
 const options: ConvertOptions = {};
@@ -30,8 +30,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === "--source" || arg === "-s") {
     options.source = args[++i];
   } else if (arg === "--format" || arg === "-f") {
-    const format = args[++i] as "webp" | "jpeg" | "jpg" | "png" | undefined;
-    if (format && ["webp", "jpeg", "jpg", "png"].includes(format)) {
+    const format = args[++i] as SupportedFormat | undefined;
+    if (format && ["webp", "jpeg", "jpg", "png", "ico"].includes(format)) {
       options.format = format;
     }
   } else if (arg === "--dest" || arg === "-d") {

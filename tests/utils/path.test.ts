@@ -16,6 +16,11 @@ describe("getDefaultDestinationPath", () => {
     expect(result).toBe("/path/to/image.webp");
   });
 
+  it("should replace extension with ico", () => {
+    const result = getDefaultDestinationPath("/path/to/image.jpg", "ico");
+    expect(result).toBe("/path/to/image.ico");
+  });
+
   it("should handle jpeg to jpg conversion", () => {
     const result = getDefaultDestinationPath("/path/to/image.jpeg", "jpg");
     expect(result).toBe("/path/to/image.jpg");
@@ -109,6 +114,14 @@ describe("isSameFormat", () => {
     expect(isSameFormat("/path/to/image.jpg", "jpg")).toBe(true);
     expect(isSameFormat("/path/to/image.png", "png")).toBe(true);
     expect(isSameFormat("/path/to/image.webp", "webp")).toBe(true);
+  });
+
+  it("should return true for ico format", () => {
+    expect(isSameFormat("/path/to/image.ico", "ico")).toBe(true);
+  });
+
+  it("should return false when ico source targets different format", () => {
+    expect(isSameFormat("/path/to/image.ico", "png")).toBe(false);
   });
 
   it("should return true for jpeg/jpg equivalence", () => {

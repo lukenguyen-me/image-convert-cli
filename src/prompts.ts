@@ -153,6 +153,7 @@ export class InteractivePromptService implements IPromptService {
         { value: "jpeg", description: "JPEG format" },
         { value: "jpg", description: "JPG format" },
         { value: "png", description: "PNG format (lossless)" },
+        { value: "ico", description: "ICO format (favicon, embeds 32x32 and 16x16)" },
       ],
     });
   }
@@ -220,7 +221,7 @@ Options:
   --version, -v    Show version number
   --yes, -y        Non-interactive mode (use defaults for optional prompts)
   --source, -s     Source file path (required with -y)
-  --format, -f     Target format: webp, jpeg, jpg, or png (required with -y)
+  --format, -f     Target format: webp, jpeg, jpg, png, or ico (required with -y)
                    Input formats: webp, jpeg, jpg, png, svg
   --dest, -d       Destination path (optional, auto-generated if not provided)
   --compress, -c   Enable compression (optional, default: false)
