@@ -1,5 +1,5 @@
 import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
-import type { Terminal } from "./terminal";
+import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertBatch, convertImage } from "./converter";
@@ -17,9 +17,20 @@ import packageJson from "../package.json" with { type: "json" };
 /**
  * Run `imgc` with the given arguments (without the executable and script path).
  * All asking and telling goes through `terminal`; all version lookups and installs
- * go through `updater`. Returns the process exit code; never exits the process.
+ * go through `updater`. Returns the process exit code (see `ExitCode`); never exits the process.
  */
 export async function main(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
+  try {
+    return await run(argv, terminal, updater);
+  } catch (error) {
+    if (error instanceof PromptCancelled) {
+      return ExitCode.Cancelled;
+    }
+    throw error;
+  }
+}
+
+async function run(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
   if (argv[0] === "update") {
     const autoUpdate = argv.includes("--yes") || argv.includes("-y");
     await runUpdate(autoUpdate, terminal, updater);

@@ -7,9 +7,18 @@ import type { SupportedFormat } from "./types";
 
 export type OutputStream = "stdout" | "stderr";
 
+/** Thrown by any Terminal question when the user presses Ctrl-C instead of answering. */
+export class PromptCancelled extends Error {
+  constructor() {
+    super("Prompt cancelled by the user");
+    this.name = "PromptCancelled";
+  }
+}
+
 /**
  * The one place the CLI asks the user for something and tells the user something.
  * Every prompt and every line of console output goes through a Terminal.
+ * Every `ask*` method and `confirm` reject with `PromptCancelled` on Ctrl-C.
  */
 export interface Terminal {
   /** Ask for the source file or directory. */
@@ -81,7 +90,12 @@ async function inputWithPathCompletion(
     ? `${message} (${defaultValue}): `
     : `${message}: `;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    rl.on("SIGINT", () => {
+      rl.close();
+      process.stdout.write("\n");
+      reject(new PromptCancelled());
+    });
     rl.question(question, (answer) => {
       const result = answer.trim() || defaultValue || "";
       rl.close();
@@ -89,13 +103,25 @@ async function inputWithPathCompletion(
       const validationResult = validate(result);
       if (validationResult !== true) {
         console.log(`\nError: ${validationResult}`);
-        inputWithPathCompletion(message, defaultValue, validate).then(resolve);
+        inputWithPathCompletion(message, defaultValue, validate).then(resolve, reject);
         return;
       }
 
       resolve(result);
     });
   });
+}
+
+/** Turn inquirer's Ctrl-C error into the Terminal's `PromptCancelled`. */
+async function cancellable<T>(prompt: Promise<T>): Promise<T> {
+  try {
+    return await prompt;
+  } catch (error) {
+    if (error instanceof Error && error.name === "ExitPromptError") {
+      throw new PromptCancelled();
+    }
+    throw error;
+  }
 }
 
 /** The production Terminal: inquirer prompts, readline Tab completion and the console. */
@@ -113,7 +139,7 @@ export class InteractiveTerminal implements Terminal {
   }
 
   async askFormat(): Promise<SupportedFormat> {
-    return select<SupportedFormat>({
+    return cancellable(select<SupportedFormat>({
       message: "Target format:",
       choices: [
         { value: "webp", description: "WebP format (recommended for web)" },
@@ -122,7 +148,7 @@ export class InteractiveTerminal implements Terminal {
         { value: "png", description: "PNG format (lossless)" },
         { value: "ico", description: "ICO format (favicon, embeds 32x32 and 16x16)" },
       ],
-    });
+    }));
   }
 
   async askDestination(defaultPath: string): Promise<string> {
@@ -151,7 +177,7 @@ export class InteractiveTerminal implements Terminal {
   }
 
   async confirm(question: string, defaultAnswer: boolean): Promise<boolean> {
-    return confirm({ message: question, default: defaultAnswer });
+    return cancellable(confirm({ message: question, default: defaultAnswer }));
   }
 
   say(text: string): void {

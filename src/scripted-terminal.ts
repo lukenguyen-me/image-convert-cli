@@ -1,7 +1,10 @@
-import type { OutputStream, Terminal } from "./terminal";
+import { PromptCancelled, type OutputStream, type Terminal } from "./terminal";
 import type { SupportedFormat } from "./types";
 
-export type ScriptedAnswer = string | boolean;
+/** Queue this in place of an answer to press Ctrl-C at that question. */
+export const CTRL_C = Symbol("Ctrl-C");
+
+export type ScriptedAnswer = string | boolean | typeof CTRL_C;
 
 /**
  * A Terminal for tests: answers come from a queue, output is recorded.
@@ -10,6 +13,7 @@ export type ScriptedAnswer = string | boolean;
  *   left, or getting an answer of the wrong type, throws.
  * - An empty-string answer to a path question takes the offered default,
  *   as pressing Enter does in the interactive Terminal.
+ * - A `CTRL_C` answer makes that question reject with `PromptCancelled`.
  * - `asked` lists every question in order; `stdout` and `stderr` hold the output.
  */
 export class ScriptedTerminal implements Terminal {
@@ -73,7 +77,11 @@ export class ScriptedTerminal implements Terminal {
     if (this.answers.length === 0) {
       throw new Error(`ScriptedTerminal: no answer queued for "${question}"`);
     }
-    return this.answers.shift()!;
+    const answer = this.answers.shift()!;
+    if (answer === CTRL_C) {
+      throw new PromptCancelled();
+    }
+    return answer;
   }
 
   private nextString(question: string): string {
