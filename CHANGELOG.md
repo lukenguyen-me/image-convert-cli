@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - GIF, TIFF (`.tif`/`.tiff`) and AVIF are accepted as sources, in single-file runs and Batches.
+- HEIC (`.heic`/`.heif`, such as iPhone photos) is accepted as a source, in single-file runs and Batches. Display P3 colour is converted to sRGB, as for any other source.
 - `--overwrite` replaces output files that already exist.
 - An interactive run whose outputs already exist asks once: overwrite all, skip them, or cancel.
 - Skipped Conversions are reported with their reason, such as "already WebP" or "<path> already exists"; Batch summaries list them under "Skipped files:".

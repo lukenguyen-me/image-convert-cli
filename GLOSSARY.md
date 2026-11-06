@@ -11,7 +11,7 @@ An image format the tool can write, such as WebP, JPEG, PNG or ICO. Each has one
 _Avoid_: target format, supported format
 
 **Input Format**:
-An image format the tool can read, such as JPEG, PNG, WebP, GIF, TIFF, AVIF or SVG. Some are Input Formats only (SVG, GIF), and some are Output Formats only (ICO).
+An image format the tool can read, such as JPEG, PNG, WebP, GIF, TIFF, AVIF, SVG or HEIC. Some are Input Formats only (GIF, TIFF, AVIF, SVG, HEIC), and some are Output Formats only (ICO).
 _Avoid_: source format
 
 **Format Alias**:

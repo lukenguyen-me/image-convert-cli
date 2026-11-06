@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import ico from "sharp-ico";
+import { openHeic } from "./heic";
 
 /** An image format the tool can write. See GLOSSARY.md. */
 export interface OutputFormat {
@@ -112,16 +113,11 @@ export interface EncodeOptions {
  */
 export async function encode(source: string, output: string, options: EncodeOptions): Promise<void> {
   const format = definitionOf(options.format);
-  const inputFormat = findInputFormat(source);
+  const inputFormat = inputDefinitionOf(source);
   if (!inputFormat) {
     throw new Error(`Unsupported input format: ${path.basename(source)}`);
   }
-  let image = sharp(source);
-  if (inputFormat.name === "svg") {
-    // SVG has no pixel size of its own worth keeping: rasterise it to fit 512x512.
-    image = image.resize(512, 512, { fit: "inside" });
-  }
-  await format.write(image, output, options.compress);
+  await format.write(await inputFormat.open(source), output, options.compress);
 }
 
 /** The Output Format with its encode recipe. Every FormatSpelling names exactly one. */
@@ -139,21 +135,43 @@ export interface InputFormat {
   readonly extensions: readonly string[];
 }
 
-/** Every Input Format. Single-file runs and Batches both read exactly these. */
-export const INPUT_FORMATS: readonly InputFormat[] = [
-  { name: "jpeg", label: "JPEG", extensions: ["jpeg", "jpg"] },
-  { name: "png", label: "PNG", extensions: ["png"] },
-  { name: "webp", label: "WebP", extensions: ["webp"] },
-  { name: "gif", label: "GIF", extensions: ["gif"] },
-  { name: "tiff", label: "TIFF", extensions: ["tiff", "tif"] },
-  { name: "avif", label: "AVIF", extensions: ["avif"] },
-  { name: "svg", label: "SVG", extensions: ["svg"] },
+/** An Input Format plus its decode recipe, which stays inside this module. */
+interface InputFormatDefinition extends InputFormat {
+  /** Open `source` for encoding, as a sharp image. */
+  open(source: string): Sharp | Promise<Sharp>;
+}
+
+const openWithSharp = (source: string) => sharp(source);
+
+const INPUT_FORMAT_TABLE: readonly InputFormatDefinition[] = [
+  { name: "jpeg", label: "JPEG", extensions: ["jpeg", "jpg"], open: openWithSharp },
+  { name: "png", label: "PNG", extensions: ["png"], open: openWithSharp },
+  { name: "webp", label: "WebP", extensions: ["webp"], open: openWithSharp },
+  { name: "gif", label: "GIF", extensions: ["gif"], open: openWithSharp },
+  { name: "tiff", label: "TIFF", extensions: ["tiff", "tif"], open: openWithSharp },
+  { name: "avif", label: "AVIF", extensions: ["avif"], open: openWithSharp },
+  {
+    name: "svg",
+    label: "SVG",
+    extensions: ["svg"],
+    // SVG has no pixel size of its own worth keeping: rasterise it to fit 512x512.
+    open: (source) => sharp(source).resize(512, 512, { fit: "inside" }),
+  },
+  { name: "heic", label: "HEIC", extensions: ["heic", "heif"], open: openHeic },
 ];
+
+/** Every Input Format. Single-file runs and Batches both read exactly these. */
+export const INPUT_FORMATS: readonly InputFormat[] = INPUT_FORMAT_TABLE;
 
 /** The Input Format of a source file, judged by its extension, or undefined if the tool can't read it. */
 export function findInputFormat(sourcePath: string): InputFormat | undefined {
+  return inputDefinitionOf(sourcePath);
+}
+
+/** The Input Format of a source file with its decode recipe, judged by its extension. */
+function inputDefinitionOf(sourcePath: string): InputFormatDefinition | undefined {
   const extension = extensionOf(sourcePath);
-  return INPUT_FORMATS.find((format) => format.extensions.includes(extension));
+  return INPUT_FORMAT_TABLE.find((format) => format.extensions.includes(extension));
 }
 
 /** Whether the source file is already in the Output Format that `spelling` refers to. */

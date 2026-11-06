@@ -35,7 +35,7 @@ describe("main", () => {
       expect(terminal.stdout).toContain("Image Converter CLI");
       expect(terminal.stdout).toContain("imgc -y --source <path> --format <format>");
       expect(terminal.stdout).toMatch(/--format, -f <format> +Output Format: webp, jpeg, jpg, png, ico \(required with -y\)\n/);
-      expect(terminal.stdout).toContain("Input Formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg\n");
+      expect(terminal.stdout).toContain("Input Formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg, heic, heif\n");
       expect(terminal.stdout).toMatch(/--compress, -c +Compress the output \(default: off\)\n/);
       expect(terminal.stderr).toBe("");
       expect(terminal.asked).toEqual([]);
@@ -252,7 +252,7 @@ describe("main", () => {
       expect(terminal.asked).toEqual([]);
       expect(fs.existsSync(destination)).toBe(true);
       expect(terminal.stdout).toStartWith(
-        "Image Converter - Convert JPEG, PNG, WebP, GIF, TIFF, AVIF or SVG images to WebP, JPEG, PNG or ICO\n\n" +
+        "Image Converter - Convert JPEG, PNG, WebP, GIF, TIFF, AVIF, SVG or HEIC images to WebP, JPEG, PNG or ICO\n\n" +
           "\nConversion settings:\n" +
           `  Source: ${source}\n` +
           "  Output format: WEBP\n" +
@@ -470,6 +470,19 @@ describe("main", () => {
 
       expect(code).toBe(0);
       expect(fs.readdirSync(output).sort()).toEqual(["anim.png", "photo2.png", "scan.png"]);
+    });
+
+    it("converts HEIC sources, by either extension", async () => {
+      const heic = path.join(import.meta.dir, "fixtures", "test.heic");
+      fs.copyFileSync(heic, path.join(source, "iphone.HEIC"));
+      fs.copyFileSync(heic, path.join(source, "camera.heif"));
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", source, "-f", "jpg", "-d", output], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(output).sort()).toEqual(["camera.jpg", "iphone.jpg", "photo.jpg"]);
+      expect((await sharp(path.join(output, "iphone.jpg")).metadata()).format).toBe("jpeg");
     });
 
     it("creates a --dest directory that doesn't exist yet", async () => {

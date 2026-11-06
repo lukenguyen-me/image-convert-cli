@@ -1,6 +1,6 @@
 # image-convert-cli
 
-> A fast, interactive CLI tool that converts JPEG, PNG, WebP, GIF, TIFF, AVIF and SVG images to WebP, JPEG, PNG or ICO
+> A fast, interactive CLI tool that converts JPEG, PNG, WebP, GIF, TIFF, AVIF, SVG and HEIC images to WebP, JPEG, PNG or ICO
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -85,7 +85,7 @@ imgc -y -s photo.png -f webp
 |------|-------|-------------|
 | `--help` | `-h` | Show the help message |
 | `--version` | `-v` | Show the version number |
-| `--source <path>` | `-s` | Source file, or a directory to convert every image in (required with `-y`). Input Formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg |
+| `--source <path>` | `-s` | Source file, or a directory to convert every image in (required with `-y`). Input Formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg, heic, heif |
 | `--format <format>` | `-f` | Output Format: webp, jpeg, jpg, png, ico (required with `-y`) |
 | `--dest <path>` | `-d` | Output file, or output directory for a directory source (default: next to the source) |
 | `--compress` | `-c` | Compress the output (default: off) |
@@ -178,12 +178,14 @@ src/
 ├── plan.ts             # Conversion Plan: output paths and skip rules
 ├── converter.ts        # Runs one Conversion and measures it
 ├── formats.ts          # Output Formats, Input Formats and encode recipes
+├── heic.ts             # Opens HEIC/HEIF sources, which sharp alone can't decode
 ├── messages.ts         # All user-facing wording
 ├── exit-codes.ts       # Exit codes 0/1/2/130
 ├── terminal.ts         # Terminal interface and the interactive implementation
 ├── scripted-terminal.ts # Terminal test double with queued answers
 ├── updater.ts          # Updater interface, npm implementation and test double
 ├── types.ts            # ConversionResult and RunSummary
+├── types/heic-decode.d.ts # Type declarations for heic-decode
 └── utils/format.ts     # Byte formatting
 tests/                  # Tests
 ```
@@ -224,7 +226,7 @@ const code = await main(["-y", "-s", "photo.png", "-f", "webp"], terminal, new I
 ## Tech Stack
 
 - **Runtime**: Bun v1.3+
-- **Image Processing**: Sharp v0.34+
+- **Image Processing**: Sharp v0.34+, heic-decode (libheif as WASM) for HEIC sources
 - **CLI Prompts**: @inquirer/prompts v8.2+
 - **Testing**: bun:test
 
@@ -235,5 +237,6 @@ MIT License - see [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [Sharp](https://sharp.pixelplumbing.com/) - High-performance image processing
+- [heic-decode](https://github.com/catdad-experiments/heic-decode) - HEIC decoding
 - [Bun](https://bun.sh/) - Fast JavaScript runtime
 - [@inquirer/prompts](https://github.com/SBoudrias/Inquirer.js) - Interactive CLI prompts

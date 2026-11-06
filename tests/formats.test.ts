@@ -1,4 +1,4 @@
-import { expect, describe, it, beforeEach, afterEach } from "bun:test";
+import { expect, describe, it, beforeEach, afterEach, spyOn } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -33,6 +33,19 @@ async function makeImage(name: string, width = 40, height = 20): Promise<string>
   const file = path.join(dir, name);
   const format = path.extname(name).slice(1) as keyof sharp.FormatEnum;
   await sharp({ create: { width, height, channels: 3, background: "#c33" } }).toFormat(format).toFile(file);
+  return file;
+}
+
+/** A 40x20 solid #c33 HEIC (HEVC-coded, as an iPhone writes): sharp cannot make one, so it is a fixture. */
+const HEIC_FIXTURE = path.join(import.meta.dir, "fixtures", "test.heic");
+
+/** An 8x8 HEIC of sRGB pure red (255, 0, 0), converted by macOS to Display P3 as iPhones write it. */
+const DISPLAY_P3_HEIC_FIXTURE = path.join(import.meta.dir, "fixtures", "display-p3.heic");
+
+/** Copy a fixture into the test's directory as `name`; returns its path. */
+function copyFixture(fixture: string, name: string): string {
+  const file = path.join(dir, name);
+  fs.copyFileSync(fixture, file);
   return file;
 }
 
@@ -170,6 +183,20 @@ describe("sizes", () => {
     expect(await decodedSizes(destination)).toEqual([[1000, 500]]);
   });
 
+  it("keeps a HEIC source's own size and colour", async () => {
+    const source = copyFixture(HEIC_FIXTURE, "photo.heic");
+    const destination = path.join(dir, "photo.png");
+
+    await encode(source, destination, { format: "png", compress: false });
+
+    expect(await decodedSizes(destination)).toEqual([[40, 20]]);
+    const [red, green, blue] = (await sharp(destination).stats()).channels.map((channel) => channel.mean);
+    // #c33 is (204, 51, 51); HEVC is lossy, so allow a little drift.
+    for (const [actual, expected] of [[red, 204], [green, 51], [blue, 51]] as const) {
+      expect(Math.abs(actual! - expected)).toBeLessThan(8);
+    }
+  });
+
   it("embeds 32 and 16 px images in an ICO", async () => {
     const source = await makeImage("square.png", 100, 100);
     const destination = path.join(dir, "square.ico");
@@ -189,7 +216,15 @@ const INPUT_FORMAT_TABLE = [
   { name: "tiff", label: "TIFF", extensions: ["tiff", "tif"] },
   { name: "avif", label: "AVIF", extensions: ["avif"] },
   { name: "svg", label: "SVG", extensions: ["svg"] },
+  { name: "heic", label: "HEIC", extensions: ["heic", "heif"] },
 ];
+
+/** Write a source of the given Input Format, named `input-<name>.<extension>`; returns its path. */
+async function makeSource(name: string, extension: string): Promise<string> {
+  if (name === "svg") return writeSvg(`input-svg.${extension}`, 30, 30);
+  if (name === "heic") return copyFixture(HEIC_FIXTURE, `input-heic.${extension}`);
+  return makeImage(`input-${name}.${extension}`);
+}
 
 describe("Input Formats", () => {
   it("are exactly the formats in the table, in order", () => {
@@ -198,9 +233,8 @@ describe("Input Formats", () => {
 
   for (const row of INPUT_FORMAT_TABLE) {
     for (const extension of row.extensions) {
-      it(`recognises a .${extension} source as ${row.label} and sharp can read it`, async () => {
-        const source =
-          row.name === "svg" ? writeSvg(`input.${extension}`, 30, 30) : await makeImage(`input-${row.name}.${extension}`);
+      it(`recognises a .${extension} source as ${row.label} and can read it`, async () => {
+        const source = await makeSource(row.name, extension);
         const destination = path.join(dir, `from-${extension}.png`);
 
         expect(findInputFormat(source)?.label).toBe(row.label);
@@ -225,6 +259,60 @@ describe("Input Formats", () => {
     await expect(encode(source, path.join(dir, "photo.webp"), { format: "webp", compress: false })).rejects.toThrow(
       "Unsupported input format",
     );
+  });
+});
+
+describe("HEIC sources", () => {
+  it("keep their colour when tagged Display P3, as iPhone photos are", async () => {
+    const source = copyFixture(DISPLAY_P3_HEIC_FIXTURE, "iphone.heic");
+    const destination = path.join(dir, "iphone.png");
+
+    await encode(source, destination, { format: "png", compress: false });
+
+    // Read as plain sRGB, the P3 pixels would come out near (234, 50, 35).
+    const [red, green, blue] = (await sharp(destination).stats()).channels.map((channel) => channel.mean);
+    expect(red).toBeGreaterThan(245);
+    expect(green).toBeLessThan(15);
+    expect(blue).toBeLessThan(15);
+  });
+
+  it("gain no alpha channel when opaque", async () => {
+    const source = copyFixture(HEIC_FIXTURE, "opaque.heic");
+    const destination = path.join(dir, "opaque.png");
+
+    await encode(source, destination, { format: "png", compress: false });
+
+    expect((await sharp(destination).metadata()).channels).toBe(3);
+  });
+
+  it("can be AV1-coded .heif files", async () => {
+    const source = path.join(dir, "camera.heif");
+    await sharp({ create: { width: 40, height: 20, channels: 3, background: "#c33" } })
+      .heif({ compression: "av1" })
+      .toFile(source);
+    const destination = path.join(dir, "camera.png");
+
+    await encode(source, destination, { format: "png", compress: false });
+
+    expect(await decodedSizes(destination)).toEqual([[40, 20]]);
+  });
+
+  it("that are corrupt fail with a one-line message naming the file, and print nothing", async () => {
+    const source = path.join(dir, "broken.heic");
+    fs.writeFileSync(source, fs.readFileSync(HEIC_FIXTURE).subarray(0, 400));
+    const printed = [spyOn(console, "log"), spyOn(console, "warn"), spyOn(console, "error")];
+
+    try {
+      const error = await encode(source, path.join(dir, "broken.png"), { format: "png", compress: false }).catch(
+        (thrown: Error) => thrown,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toStartWith("Can't read broken.heic: ");
+      expect((error as Error).message).not.toContain("\n");
+      for (const spy of printed) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of printed) spy.mockRestore();
+    }
   });
 });
 
