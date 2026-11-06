@@ -67,15 +67,16 @@ const FLAGS = {
     type: "boolean",
     help: ["Replace output files that already exist (default: ask, or skip them with -y)"],
   },
-} as const satisfies Record<
-  string,
-  { type: "string" | "boolean"; short?: string; value?: string; help: readonly string[] }
->;
+} as const satisfies Record<string, FlagSpec>;
 
+type FlagSpec = { type: "string" | "boolean"; short?: string; value?: string; help: readonly string[] };
 type FlagName = keyof typeof FLAGS;
 
+/** Every flag's spec, with each optional field readable whichever flag it is. */
+const FLAG_SPECS: Record<FlagName, FlagSpec> = FLAGS;
+
 function flagUsage(name: FlagName): string {
-  const flag = FLAGS[name] as { short?: string; value?: string };
+  const flag = FLAG_SPECS[name];
   return `--${name}${flag.short ? `, -${flag.short}` : ""}${flag.value ? ` <${flag.value}>` : ""}`;
 }
 
@@ -190,7 +191,7 @@ function toUsageError(error: Error & { code?: string }): Error {
   if (error.code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
     const quoted = error.message.match(/'([^']+)'/)?.[1] ?? "";
     const name = (Object.keys(FLAGS) as FlagName[]).find((flag) => {
-      const short: string | undefined = (FLAGS[flag] as { short?: string }).short;
+      const short = FLAG_SPECS[flag].short;
       return quoted.split(/[\s,]+/).some((token) => token === `--${flag}` || (short && token === `-${short}`));
     });
     return new UsageError(name ? `--${name} needs a value` : error.message);
