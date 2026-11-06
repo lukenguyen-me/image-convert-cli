@@ -299,14 +299,14 @@ describe("main", () => {
       expect(fs.existsSync(path.join(source, "photo.png"))).toBe(true);
     });
 
-    it("lists failed files in the summary and still exits 0", async () => {
+    it("lists failed files in the summary and exits 1 when any Conversion fails", async () => {
       const broken = path.join(source, "broken.png");
       fs.writeFileSync(broken, "not an image");
       const terminal = new ScriptedTerminal();
 
       const code = await main(["-y", "-s", source, "-f", "webp", "-d", output], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stdout).toContain("  Total files: 2\n  Converted: 1\n  Failed: 1\n");
       expect(terminal.stdout).toContain(`\nFailed files:\n  - ${broken}: `);
     });

@@ -1,6 +1,7 @@
 import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
 import type { Terminal } from "./terminal";
 import type { Updater } from "./updater";
+import { ExitCode } from "./exit-codes";
 import { convertBatch, convertImage } from "./converter";
 import { getDefaultDestinationPath, getImageFilesFromDirectory, isDirectory } from "./utils/path";
 import {
@@ -53,8 +54,7 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
   const targetFormat = options.format || (await terminal.askFormat());
 
   if (isDirectory(sourcePath)) {
-    await runBatch(sourcePath, targetFormat, options, terminal);
-    return 0;
+    return runBatch(sourcePath, targetFormat, options, terminal);
   }
 
   const destinationPath =
@@ -95,7 +95,7 @@ async function runBatch(
   targetFormat: SupportedFormat,
   options: ConvertOptions,
   terminal: Terminal,
-): Promise<void> {
+): Promise<ExitCode> {
   const yesMode = options.yes === true;
 
   // Destination directory defaults to the source directory
@@ -111,7 +111,7 @@ async function runBatch(
     const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
     if (!shouldProceed) {
       terminal.say("Batch conversion cancelled.");
-      return;
+      return ExitCode.Success;
     }
   }
 
@@ -125,6 +125,7 @@ async function runBatch(
 
   const summary = await convertBatch(settings);
   terminal.say(batchResultText(summary));
+  return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
 }
 
 async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<void> {
