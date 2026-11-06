@@ -1,5 +1,5 @@
 import type { OutputStream, Terminal } from "./terminal";
-import type { SupportedFormat } from "./types";
+import type { FormatSpelling } from "./formats";
 
 export type ScriptedAnswer = string | boolean;
 
@@ -31,8 +31,8 @@ export class ScriptedTerminal implements Terminal {
     return this.nextString("Source file path");
   }
 
-  async askFormat(): Promise<SupportedFormat> {
-    return this.nextString("Target format") as SupportedFormat;
+  async askFormat(): Promise<FormatSpelling> {
+    return this.nextString("Target format") as FormatSpelling;
   }
 
   async askDestination(defaultPath: string): Promise<string> {

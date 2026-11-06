@@ -10,6 +10,10 @@ export interface OutputFormat {
   readonly label: string;
   /** Format Aliases: other spellings that pick the extension but never change the encoding. */
   readonly aliases: readonly string[];
+  /** The spelling the interactive prompt picks for this format, which sets the extension it writes. */
+  readonly promptSpelling: string;
+  /** One line shown beside the format in the interactive prompt. */
+  readonly description: string;
 }
 
 /** An Output Format plus its encode recipe, which stays inside this module. */
@@ -23,6 +27,8 @@ const OUTPUT_FORMAT_TABLE = [
     name: "webp",
     label: "WebP",
     aliases: [],
+    promptSpelling: "webp",
+    description: "WebP format (recommended for web)",
     write: (image, destinationPath, compress) =>
       image.webp(compress ? { quality: 100, lossless: true } : { quality: 100 }).toFile(destinationPath),
   },
@@ -30,6 +36,8 @@ const OUTPUT_FORMAT_TABLE = [
     name: "jpeg",
     label: "JPEG",
     aliases: ["jpg"],
+    promptSpelling: "jpg",
+    description: "JPEG format, written as .jpg",
     write: (image, destinationPath, compress) =>
       image.jpeg(compress ? { quality: 100, mozjpeg: true } : { quality: 100 }).toFile(destinationPath),
   },
@@ -37,6 +45,8 @@ const OUTPUT_FORMAT_TABLE = [
     name: "png",
     label: "PNG",
     aliases: [],
+    promptSpelling: "png",
+    description: "PNG format (lossless)",
     write: (image, destinationPath, compress) =>
       image.png({ compressionLevel: compress ? 9 : 6 }).toFile(destinationPath),
   },
@@ -44,6 +54,8 @@ const OUTPUT_FORMAT_TABLE = [
     name: "ico",
     label: "ICO",
     aliases: [],
+    promptSpelling: "ico",
+    description: "ICO format (favicon, embeds 32x32 and 16x16)",
     // Compress is ignored: an ICO always embeds 32 and 16 px images.
     write: (image, destinationPath) => ico.sharpsToIco([image], destinationPath, { sizes: [32, 16] }),
   },
@@ -56,6 +68,32 @@ export type FormatSpelling = OutputFormatRow["name"] | OutputFormatRow["aliases"
 
 /** Every Output Format, in the order the tool offers them. */
 export const OUTPUT_FORMATS: readonly OutputFormat[] = OUTPUT_FORMAT_TABLE;
+
+/** Every spelling a user may type for an Output Format: each name followed by its Format Aliases. */
+export const FORMAT_SPELLINGS: readonly FormatSpelling[] = OUTPUT_FORMAT_TABLE.flatMap(
+  (format): FormatSpelling[] => [format.name, ...format.aliases],
+);
+
+/** Whether `spelling` is exactly one of the FORMAT_SPELLINGS. */
+export function isFormatSpelling(spelling: string): spelling is FormatSpelling {
+  return (FORMAT_SPELLINGS as readonly string[]).includes(spelling);
+}
+
+/** A choice in the interactive format prompt. */
+export interface FormatPromptChoice {
+  readonly spelling: FormatSpelling;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** The interactive prompt's choices: one per Output Format, in order. */
+export function formatPromptChoices(): FormatPromptChoice[] {
+  return OUTPUT_FORMAT_TABLE.map((format) => ({
+    spelling: format.promptSpelling,
+    label: format.label,
+    description: format.description,
+  }));
+}
 
 /** The Output Format a spelling (name or Format Alias, any case) refers to. */
 export function findOutputFormat(spelling: string): OutputFormat | undefined {

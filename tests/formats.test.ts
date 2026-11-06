@@ -4,7 +4,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import sharp from "sharp";
 import ico from "sharp-ico";
-import { encode, findInputFormat, findOutputFormat, INPUT_FORMATS, isSameFormat, OUTPUT_FORMATS } from "../src/formats";
+import {
+  encode,
+  findInputFormat,
+  findOutputFormat,
+  FORMAT_SPELLINGS,
+  formatPromptChoices,
+  INPUT_FORMATS,
+  isSameFormat,
+  OUTPUT_FORMATS,
+} from "../src/formats";
 
 let dir: string;
 
@@ -207,5 +216,22 @@ describe("Input Formats", () => {
     await expect(encode(source, path.join(dir, "photo.webp"), "webp", { compress: false })).rejects.toThrow(
       "Unsupported input format",
     );
+  });
+});
+
+describe("format choices", () => {
+  it("the prompt offers WebP, JPEG, PNG and ICO, and JPEG writes .jpg", () => {
+    const choices = formatPromptChoices();
+
+    expect(choices.map((choice) => choice.label)).toEqual(["WebP", "JPEG", "PNG", "ICO"]);
+    expect(choices.map((choice) => choice.spelling)).toEqual(["webp", "jpg", "png", "ico"]);
+    for (const choice of choices) {
+      expect(findOutputFormat(choice.spelling)?.label).toBe(choice.label);
+      expect(choice.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every name and Format Alias can be typed", () => {
+    expect(FORMAT_SPELLINGS).toEqual(["webp", "jpeg", "jpg", "png", "ico"]);
   });
 });

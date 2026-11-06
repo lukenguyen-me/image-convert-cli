@@ -1,24 +1,18 @@
-import sharp from "sharp";
-import ico from "sharp-ico";
 import * as fs from "node:fs";
+import * as path from "node:path";
+import { type FormatSpelling, encode, isSameFormat } from "./formats";
 import type {
   ConversionResult,
-  SupportedFormat,
   BatchConversionSettings,
   BatchConversionSummary,
   BatchConversionResult,
 } from "./types";
-import {
-  getImageFilesFromDirectory,
-  isSameFormat,
-  ensureDirectoryExists,
-  getExtension,
-} from "./utils/path";
+import { getImageFilesFromDirectory, ensureDirectoryExists } from "./utils/path";
 
 export async function convertImage(
   sourcePath: string,
   destinationPath: string,
-  format: SupportedFormat,
+  format: FormatSpelling,
   compress: boolean,
 ): Promise<ConversionResult> {
   const startTime = Date.now();
@@ -26,71 +20,15 @@ export async function convertImage(
   try {
     const originalSize = fs.statSync(sourcePath).size;
 
-    if (format === "ico") {
-      let sharpInstance = sharp(sourcePath);
-      if (getExtension(sourcePath) === "svg") {
-        sharpInstance = sharpInstance.resize(512, 512, { fit: "inside" });
-      }
-      await ico.sharpsToIco([sharpInstance], destinationPath, { sizes: [32, 16] });
-      const outputSize = fs.statSync(destinationPath).size;
-      return {
-        success: true,
-        sourcePath,
-        destinationPath,
-        originalSize,
-        outputSize,
-        elapsed: Date.now() - startTime,
-      };
-    }
-
-    // Determine output format for Sharp
-    let sharpFormat: keyof sharp.FormatEnum;
-    let options: sharp.JpegOptions | sharp.WebpOptions | sharp.PngOptions | sharp.OutputInfo;
-
-    switch (format) {
-      case "webp":
-        sharpFormat = "webp";
-        options = compress
-          ? { quality: 100, lossless: true }
-          : { quality: 100 };
-        break;
-      case "jpeg":
-      case "jpg":
-        sharpFormat = "jpeg";
-        options = compress ? { quality: 100, mozjpeg: true } : { quality: 100 };
-        break;
-      case "png":
-        sharpFormat = "png";
-        options = compress
-          ? { compressionLevel: 9 }
-          : { compressionLevel: 6 };
-        break;
-      default:
-        throw new Error(`Unsupported format: ${format}`);
-    }
-
-    // Perform the conversion
-    let sharpInstance = sharp(sourcePath);
-
-    // For SVG input, resize to get proper output dimensions
-    if (getExtension(sourcePath) === "svg") {
-      sharpInstance = sharpInstance.resize(512, 512, { fit: "inside" });
-    }
-
-    await sharpInstance
-      .toFormat(sharpFormat, options)
-      .toFile(destinationPath);
-
-    const outputSize = fs.statSync(destinationPath).size;
-    const elapsed = Date.now() - startTime;
+    await encode(sourcePath, destinationPath, format, { compress });
 
     return {
       success: true,
       sourcePath,
       destinationPath,
       originalSize,
-      outputSize,
-      elapsed,
+      outputSize: fs.statSync(destinationPath).size,
+      elapsed: Date.now() - startTime,
     };
   } catch (error) {
     return {
@@ -119,10 +57,9 @@ export async function convertBatch(
   let skippedCount = 0;
 
   for (const sourcePath of files) {
-    const fileName = require("node:path").basename(sourcePath);
-    const destPath = require("node:path").join(
+    const destPath = path.join(
       settings.destinationDir,
-      `${require("node:path").parse(fileName).name}.${settings.targetFormat}`,
+      `${path.parse(sourcePath).name}.${settings.targetFormat}`,
     );
 
     // Skip files already in target format

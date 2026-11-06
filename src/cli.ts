@@ -1,4 +1,5 @@
-import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
+import type { BatchConversionSettings, ConvertOptions } from "./types";
+import { type FormatSpelling, findInputFormat, isFormatSpelling } from "./formats";
 import type { Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { convertBatch, convertImage } from "./converter";
@@ -10,6 +11,7 @@ import {
   conversionFailureText,
   conversionSuccessText,
   settingsText,
+  unsupportedInputFormatText,
 } from "./messages";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -50,9 +52,16 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
   terminal.say(BANNER);
 
   const sourcePath = options.source || (await terminal.askSourcePath());
+  const sourceIsDirectory = isDirectory(sourcePath);
+
+  if (!sourceIsDirectory && !findInputFormat(sourcePath)) {
+    terminal.error(unsupportedInputFormatText(sourcePath));
+    return 1;
+  }
+
   const targetFormat = options.format || (await terminal.askFormat());
 
-  if (isDirectory(sourcePath)) {
+  if (sourceIsDirectory) {
     await runBatch(sourcePath, targetFormat, options, terminal);
     return 0;
   }
@@ -92,7 +101,7 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
 
 async function runBatch(
   sourceDir: string,
-  targetFormat: SupportedFormat,
+  targetFormat: FormatSpelling,
   options: ConvertOptions,
   terminal: Terminal,
 ): Promise<void> {
@@ -186,8 +195,8 @@ function parseArgs(args: string[]): ConvertOptions {
     } else if (arg === "--source" || arg === "-s") {
       options.source = args[++i];
     } else if (arg === "--format" || arg === "-f") {
-      const format = args[++i] as SupportedFormat | undefined;
-      if (format && ["webp", "jpeg", "jpg", "png", "ico"].includes(format)) {
+      const format = args[++i];
+      if (format && isFormatSpelling(format)) {
         options.format = format;
       }
     } else if (arg === "--dest" || arg === "-d") {

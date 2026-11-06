@@ -1,8 +1,18 @@
 import * as path from "node:path";
 import type { BatchConversionSummary, ConversionResult, ConversionSettings } from "./types";
 import { formatBytes } from "./utils/format";
+import { FORMAT_SPELLINGS, INPUT_FORMATS, OUTPUT_FORMATS } from "./formats";
 
-export const BANNER = "Image Converter - Convert images between webp, jpeg, jpg, png, and svg\n";
+/** "a, b, c" joined with a final conjunction: "a, b or c". */
+function listWith(items: readonly string[], conjunction: string): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} ${conjunction} ${items.at(-1)}`;
+}
+
+const inputLabels = INPUT_FORMATS.map((format) => format.label);
+const outputLabels = OUTPUT_FORMATS.map((format) => format.label);
+const inputExtensions = INPUT_FORMATS.flatMap((format) => format.extensions);
+
+export const BANNER = `Image Converter - Convert ${listWith(inputLabels, "or")} images to ${listWith(outputLabels, "or")}\n`;
 
 export const HELP_TEXT = `Image Converter CLI
 
@@ -18,8 +28,8 @@ Options:
   --version, -v    Show version number
   --yes, -y        Non-interactive mode (use defaults for optional prompts)
   --source, -s     Source file path (required with -y)
-  --format, -f     Target format: webp, jpeg, jpg, png, or ico (required with -y)
-                   Input formats: webp, jpeg, jpg, png, svg
+  --format, -f     Target format: ${FORMAT_SPELLINGS.slice(0, -1).join(", ")}, or ${FORMAT_SPELLINGS.at(-1)} (required with -y)
+                   Input formats: ${inputExtensions.join(", ")}
   --dest, -d       Destination path (optional, auto-generated if not provided)
   --compress, -c   Enable compression (optional, default: false)
 
@@ -35,6 +45,11 @@ Examples:
   imgc -y --source photo.jpg --format jpeg --compress
   imgc update                    # Check for updates
 `;
+
+/** The error for a single source that isn't a known Input Format. */
+export function unsupportedInputFormatText(sourcePath: string): string {
+  return `Error: Unsupported input format: ${sourcePath}\nSupported input formats: ${inputExtensions.join(", ")}`;
+}
 
 export function settingsText(settings: ConversionSettings): string {
   return [
