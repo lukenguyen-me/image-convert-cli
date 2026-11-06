@@ -1,7 +1,7 @@
 export * from "./types";
 export * from "./utils/path";
 export * from "./utils/format";
-export { convertImage, convertBatch } from "./converter";
+export { convertImage } from "./converter";
 export { main } from "./cli";
 export { type Terminal, type OutputStream, InteractiveTerminal } from "./terminal";
 export { ScriptedTerminal, type ScriptedAnswer } from "./scripted-terminal";

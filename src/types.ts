@@ -1,7 +1,9 @@
 import type { FormatSpelling } from "./formats";
+import type { Conversion } from "./plan";
 
 export type { FormatSpelling } from "./formats";
 
+/** The outcome of one Conversion that ran, in a single-file run or a Batch. */
 export type ConversionResult = {
   success: boolean;
   sourcePath: string;
@@ -12,36 +14,13 @@ export type ConversionResult = {
   error?: string;
 };
 
-export type ConversionSettings = {
-  sourcePath: string;
-  targetFormat: FormatSpelling;
-  destinationPath: string;
-  compress: boolean;
-};
-
-export type BatchConversionResult = {
-  success: boolean;
-  sourcePath: string;
-  destinationPath: string;
-  originalSize: number;
-  outputSize: number;
-  elapsed: number;
-  error?: string;
-};
-
-export type BatchConversionSettings = {
-  sourceDir: string;
-  targetFormat: FormatSpelling;
-  destinationDir: string;
-  compress: boolean;
-  yesMode: boolean;
-};
-
-export type BatchConversionSummary = {
+/** What one run did: every Conversion that ran, and every one skipped with its reason. */
+export type RunSummary = {
+  format: FormatSpelling;
+  outputDirectory: string;
+  /** Every Conversion in the plan, run or skipped. */
   totalFiles: number;
-  successCount: number;
-  failureCount: number;
-  skippedCount: number;
-  results: BatchConversionResult[];
+  results: ConversionResult[];
+  skipped: Conversion[];
   totalElapsed: number;
 };

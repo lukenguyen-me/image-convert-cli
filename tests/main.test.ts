@@ -446,6 +446,24 @@ describe("main", () => {
       expect(fs.readdirSync(output).sort()).toEqual(["anim.png", "photo2.png", "scan.png"]);
     });
 
+    it("creates a --dest directory that doesn't exist yet", async () => {
+      const missing = path.join(output, "new", "dir");
+
+      const code = await main(["-y", "-s", source, "-f", "webp", "-d", missing], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(missing)).toEqual(["photo.webp"]);
+    });
+
+    it("rasterises SVG sources", async () => {
+      fs.copyFileSync(path.join(import.meta.dir, "fixtures", "test.svg"), path.join(source, "logo.svg"));
+
+      const code = await main(["-y", "-s", source, "-f", "png", "-d", output], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect((await sharp(path.join(output, "logo.png")).metadata()).format).toBe("png");
+    });
+
     it("an Unattended Run honours --dest", async () => {
       const terminal = new ScriptedTerminal();
 
@@ -631,6 +649,21 @@ describe("main", () => {
       ]);
       expect(await formatOf(path.join(dir, "photo.png.webp"))).toBe("webp");
       expect(await formatOf(path.join(dir, "photo.jpg.webp"))).toBe("webp");
+    });
+
+    it("a Batch skips sources already in the Output Format and reports why", async () => {
+      await writeImage("a.png");
+      const already = await writeImage("b.webp");
+      const before = fs.readFileSync(already);
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(dir).sort()).toEqual(["a.png", "a.webp", "b.webp"]);
+      expect(fs.readFileSync(already)).toEqual(before);
+      expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
+      expect(terminal.stdout).toContain(`\nSkipped files:\n  - ${already}: already WebP\n`);
     });
   });
 });

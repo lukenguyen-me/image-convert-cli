@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import type { BatchConversionSummary, ConversionResult } from "./types";
+import type { ConversionResult, RunSummary } from "./types";
 import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
@@ -61,7 +61,7 @@ async function run(argv: string[], terminal: Terminal, updater: Updater): Promis
 async function runConvert(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
   const { source, format, destination, compress } = settings;
 
-  terminal.say(settingsText({ sourcePath: source, targetFormat: format, destinationPath: destination, compress }));
+  terminal.say(settingsText(settings));
 
   const shouldProceed = settings.unattended || (await terminal.confirm("Proceed with conversion?", true));
 
@@ -108,16 +108,16 @@ async function runBatch(settings: ConvertSettings, terminal: Terminal): Promise<
     results.push(await convertImage(conversion.source, conversion.output, settings.format, settings.compress));
   }
 
-  const summary: BatchConversionSummary = {
+  const summary: RunSummary = {
+    format: settings.format,
+    outputDirectory: plan.outputDirectory,
     totalFiles: plan.conversions.length,
-    successCount: results.filter((result) => result.success).length,
-    failureCount: results.filter((result) => !result.success).length,
-    skippedCount: plan.conversions.length - toRun.length,
     results,
+    skipped: plan.conversions.filter((conversion) => conversion.skip),
     totalElapsed: Date.now() - startTime,
   };
   terminal.say(batchResultText(summary));
-  return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
+  return results.some((result) => !result.success) ? ExitCode.ConversionFailed : ExitCode.Success;
 }
 
 async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
