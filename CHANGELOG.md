@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- GIF, TIFF (`.tif`/`.tiff`) and AVIF are accepted as sources, in single-file runs and Batches.
+- `--overwrite` replaces output files that already exist.
+- An interactive run whose outputs already exist asks once: overwrite all, skip them, or cancel.
+- Skipped Conversions are reported with their reason, such as "already WebP" or "<path> already exists"; Batch summaries list them under "Skipped files:".
+
+### Changed
+- `-y` no longer turns on Compress for single files. Compress is on only with `-c`.
+- An Unattended Run (`-y`) never prompts: without `--dest` it writes next to the source.
+- Unattended Runs skip output files that already exist unless `--overwrite` is given. Single-file runs no longer overwrite silently.
+- Exit codes: 0 on success, 1 when a Conversion or any file in a Batch fails, 2 for a usage error, 130 when you cancel.
+- A bad or unknown flag, a bad `--format`, a missing `--source`/`--format` with `-y`, or a source that isn't a known Input Format exits 2 with an error and a pointer to `imgc --help`.
+- Declining a confirmation or pressing Ctrl-C at a prompt exits 130.
+- The interactive JPEG choice writes `.jpg`. On the command line the spelling you type picks the extension: `-f jpg` writes `.jpg`, `-f jpeg` writes `.jpeg`.
+- In a Batch, sources whose output names would collide keep their extension: `photo.png` and `photo.jpg` become `photo.png.webp` and `photo.jpg.webp`.
+- A Batch never writes over one of its own sources, even with `--overwrite`, and skips sources already in the Output Format.
+- Converting a file to its own format writes `<name>.converted.<ext>` by default (for example `photo.converted.png`). A `--dest` equal to the source exits 2.
+- The Batch confirmation counts only the Conversions that will run.
+- `imgc update` asks "Update image-convert-cli <current> → <latest>?" before installing.
+
+### Fixed
+- `-c` works: it compresses single files and every file in a Batch, and stops the compression question being asked.
+- The "Saved %" line no longer shows NaN when the original file is empty.
+
 ## [1.2.0] - 2026-02-13
 
 ### Added
