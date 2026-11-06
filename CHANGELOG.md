@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - The interactive JPEG choice writes `.jpg`. On the command line the spelling you type picks the extension: `-f jpg` writes `.jpg`, `-f jpeg` writes `.jpeg`.
 - In a Batch, sources whose output names would collide keep their extension: `photo.png` and `photo.jpg` become `photo.png.webp` and `photo.jpg.webp`.
 - A Batch never writes over one of its own sources, even with `--overwrite`, and skips sources already in the Output Format.
-- Converting a file to its own format writes `<name>.converted.<ext>` by default (for example `photo.converted.png`). A `--dest` equal to the source exits 2.
+- Converting a file to its own format writes `<name>.converted.<ext>` by default (for example `photo.converted.png`). A `--dest` equal to the source exits 2, and so does a single-file `--dest` that is an existing directory.
 - Paths that differ only in case count as the same file, as they do on the default macOS and Windows filesystems: `photo.PNG` to png writes `photo.converted.png`, and `Photo.png` and `photo.jpg` collide in a Batch.
 - The Batch confirmation counts only the Conversions that will run.
 - `imgc update` asks "Update image-convert-cli <current> → <latest>?" before installing.

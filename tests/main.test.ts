@@ -853,6 +853,36 @@ describe("main", () => {
       expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "photo.converted.png")}\n`);
     });
 
+    for (const flags of [["-y"], ["-y", "--overwrite"]]) {
+      it(`a single-file --dest that is an existing directory is refused with exit 2 (${flags.join(" ")})`, async () => {
+        const source = await writeImage("photo.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main([...flags, "-s", source, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination ${out} is a directory; give an output file path`);
+        expect(terminal.stderr).toEndWith("Run 'imgc --help' for usage.\n");
+        expect(fs.readdirSync(out)).toEqual([]);
+      });
+    }
+
+    it("an interactive single-file run whose destination is a directory is refused with exit 2", async () => {
+      const source = await writeImage("photo.png");
+      const out = path.join(dir, "out");
+      fs.mkdirSync(out);
+      const terminal = new ScriptedTerminal([out, false]);
+
+      const code = await main(["-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(2);
+      expect(terminal.stderr).toContain(`the destination ${out} is a directory`);
+      expect(terminal.asked).toEqual([`Destination path (${path.join(dir, "photo.webp")})`, "Do you want to compress the image?"]);
+      expect(fs.readdirSync(out)).toEqual([]);
+    });
+
     describe("paths that differ only in case name the same file", () => {
       for (const flags of [[], ["--overwrite"]]) {
         it(`a same-format source with an upper-case extension writes <name>.converted.<ext> (${flags.join(" ") || "no flags"})`, async () => {

@@ -65,6 +65,9 @@ function planSingle(settings: ConvertSettings): ConversionPlan {
   if (isSamePath(destination, source)) {
     throw new UsageError(`the destination is the source file ${source}; choose another output path`);
   }
+  if (isDirectory(destination)) {
+    throw new UsageError(`the destination ${destination} is a directory; give an output file path`);
+  }
   return { batch: false, outputDirectory: path.dirname(destination), conversions: [{ source, output: destination }] };
 }
 
@@ -91,6 +94,10 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
   }
 
   return { batch: true, outputDirectory: destination, conversions };
+}
+
+function isDirectory(filePath: string): boolean {
+  return fs.statSync(filePath, { throwIfNoEntry: false })?.isDirectory() ?? false;
 }
 
 function isSamePath(a: string, b: string): boolean {
