@@ -44,7 +44,7 @@ export function settingsText(settings: ConvertSettings): string {
   return [
     "\nConversion settings:",
     `  Source: ${settings.source}`,
-    `  Target format: ${settings.format.toUpperCase()}`,
+    `  Output format: ${settings.format.toUpperCase()}`,
     `  Destination: ${settings.destination}`,
     `  Compression: ${settings.compress ? "Yes" : "No"}`,
   ].join("\n");

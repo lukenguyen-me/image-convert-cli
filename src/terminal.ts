@@ -144,7 +144,7 @@ export class InteractiveTerminal implements Terminal {
 
   async askFormat(): Promise<FormatSpelling> {
     return cancellable(select<FormatSpelling>({
-      message: "Target format:",
+      message: "Output format:",
       choices: formatPromptChoices().map((choice) => ({
         value: choice.spelling,
         name: choice.label,

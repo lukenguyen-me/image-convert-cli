@@ -37,7 +37,7 @@ export class ScriptedTerminal implements Terminal {
   }
 
   async askFormat(): Promise<FormatSpelling> {
-    return this.nextString("Target format") as FormatSpelling;
+    return this.nextString("Output format") as FormatSpelling;
   }
 
   async askDestination(defaultPath: string): Promise<string> {

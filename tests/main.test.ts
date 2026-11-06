@@ -255,7 +255,7 @@ describe("main", () => {
         "Image Converter - Convert JPEG, PNG, WebP, GIF, TIFF, AVIF or SVG images to WebP, JPEG, PNG or ICO\n\n" +
           "\nConversion settings:\n" +
           `  Source: ${source}\n` +
-          "  Target format: WEBP\n" +
+          "  Output format: WEBP\n" +
           `  Destination: ${destination}\n` +
           // -y only skips prompts; it never turns on Compress.
           "  Compression: No\n",
@@ -286,7 +286,7 @@ describe("main", () => {
       expect(code).toBe(0);
       expect(terminal.asked).toEqual([
         "Source file path",
-        "Target format",
+        "Output format",
         `Destination path (${path.join(dir, "photo.jpeg")})`,
         "Do you want to compress the image?",
         "Proceed with conversion?",
@@ -356,7 +356,7 @@ describe("main", () => {
       expect(code).toBe(130);
       expect(terminal.asked).toEqual([
         "Source file path",
-        "Target format",
+        "Output format",
         `Destination path (${path.join(dir, "photo.webp")})`,
       ]);
       expect(fs.readdirSync(dir)).toEqual(["photo.png"]);
