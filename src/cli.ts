@@ -140,7 +140,7 @@ function report(summary: RunSummary, batch: boolean, terminal: Terminal): void {
   }
 }
 
-async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
+async function runUpdate(autoInstall: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   const version = currentVersion();
 
   let latestVersion: string;
@@ -158,7 +158,7 @@ async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updat
 
   terminal.say(`Update available: ${version} -> ${latestVersion}`);
 
-  const shouldUpdate = autoUpdate || (await terminal.confirm(updatePromptText(version, latestVersion), true));
+  const shouldUpdate = autoInstall || (await terminal.confirm(updatePromptText(version, latestVersion), true));
   if (!shouldUpdate) {
     terminal.say("Update cancelled.");
     return ExitCode.Cancelled;
