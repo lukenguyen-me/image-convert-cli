@@ -15,6 +15,21 @@ const inputExtensions = INPUT_FORMATS.flatMap((format) => format.extensions);
 
 export const BANNER = `Image Converter - Convert ${listWith(inputLabels, "or")} images to ${listWith(outputLabels, "or")}\n`;
 
+/** How the user can resolve Conversions whose output files already exist. */
+export type ExistingOutputsChoice = "overwrite" | "skip" | "cancel";
+
+/** The choices for existing output files, in the order they are offered. */
+export const EXISTING_OUTPUTS_CHOICES: readonly { value: ExistingOutputsChoice; name: string }[] = [
+  { value: "overwrite", name: "overwrite all" },
+  { value: "skip", name: "skip them" },
+  { value: "cancel", name: "cancel" },
+];
+
+/** The question asked once when the plan would replace `count` existing files, before the choices. */
+export function existingOutputsQuestion(count: number): string {
+  return count === 1 ? "1 file exists" : `${count} files exist`;
+}
+
 /** The problem with a single source that isn't a known Input Format. */
 export function unsupportedInputFormatText(sourcePath: string): string {
   return `Unsupported input format: ${sourcePath}\nSupported input formats: ${inputExtensions.join(", ")}`;

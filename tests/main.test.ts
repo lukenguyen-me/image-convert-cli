@@ -456,7 +456,10 @@ describe("main", () => {
     });
 
     it("rasterises SVG sources", async () => {
-      fs.copyFileSync(path.join(import.meta.dir, "fixtures", "test.svg"), path.join(source, "logo.svg"));
+      fs.writeFileSync(
+        path.join(source, "logo.svg"),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>',
+      );
 
       const code = await main(["-y", "-s", source, "-f", "png", "-d", output], new ScriptedTerminal(), new InMemoryUpdater());
 
@@ -735,6 +738,97 @@ describe("main", () => {
         expect(code).toBe(0);
         expect(await formatOf(path.join(dir, "photo.webp"))).toBe("webp");
         expect(terminal.stdout).toContain("\n✓ Conversion complete!\n");
+      });
+    });
+
+    describe("existing outputs in an interactive run", () => {
+      let out: string;
+
+      beforeEach(async () => {
+        for (const name of ["a.png", "b.png", "c.png"]) {
+          await writeImage(name);
+        }
+        out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "a.webp"), "old");
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+      });
+
+      const question = "2 files exist: overwrite all / skip them / cancel";
+
+      it("asks once; \"skip them\" skips exactly those and the confirmation counts the rest", async () => {
+        const terminal = new ScriptedTerminal([false, "skip", true]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question, "Convert 1 files?"]);
+        expect(fs.readFileSync(path.join(out, "a.webp"), "utf8")).toBe("old");
+        expect(fs.readFileSync(path.join(out, "b.webp"), "utf8")).toBe("old");
+        expect(await formatOf(path.join(out, "c.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 2\n");
+      });
+
+      it("\"overwrite all\" replaces them", async () => {
+        const terminal = new ScriptedTerminal([false, "overwrite", true]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question, "Convert 3 files?"]);
+        for (const name of ["a.webp", "b.webp", "c.webp"]) {
+          expect(await formatOf(path.join(out, name))).toBe("webp");
+        }
+      });
+
+      it("\"cancel\" writes nothing and exits 130", async () => {
+        const terminal = new ScriptedTerminal([false, "cancel"]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(130);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question]);
+        expect(fs.readdirSync(out).sort()).toEqual(["a.webp", "b.webp"]);
+        expect(fs.readFileSync(path.join(out, "a.webp"), "utf8")).toBe("old");
+      });
+
+      it("Ctrl-C at the question writes nothing and exits 130", async () => {
+        const terminal = new ScriptedTerminal([false, CTRL_C]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(130);
+        expect(fs.readdirSync(out).sort()).toEqual(["a.webp", "b.webp"]);
+      });
+
+      it("--overwrite answers the question, so it isn't asked", async () => {
+        const terminal = new ScriptedTerminal([false, true]);
+
+        const code = await main(["--overwrite", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", "Convert 3 files?"]);
+        expect(await formatOf(path.join(out, "a.webp"))).toBe("webp");
+      });
+
+      it("a single-file run gets the same question", async () => {
+        const source = path.join(dir, "a.png");
+        const destination = path.join(out, "a.webp");
+
+        const skipped = new ScriptedTerminal([false, "skip"]);
+        const skipCode = await main(["-s", source, "-f", "webp", "-d", destination], skipped, new InMemoryUpdater());
+
+        expect(skipCode).toBe(0);
+        expect(skipped.asked).toEqual(["Do you want to compress the image?", "1 file exists: overwrite all / skip them / cancel"]);
+        expect(fs.readFileSync(destination, "utf8")).toBe("old");
+        expect(skipped.stdout).toEndWith(`\nSkipped ${source}: ${destination} already exists\n`);
+
+        const replaced = new ScriptedTerminal([false, "overwrite", true]);
+        const replaceCode = await main(["-s", source, "-f", "webp", "-d", destination], replaced, new InMemoryUpdater());
+
+        expect(replaceCode).toBe(0);
+        expect(replaced.asked.at(-1)).toBe("Proceed with conversion?");
+        expect(await formatOf(destination)).toBe("webp");
       });
     });
 

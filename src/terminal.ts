@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
 import { type FormatSpelling, formatPromptChoices } from "./formats";
 import { expandHome } from "./settings";
+import { EXISTING_OUTPUTS_CHOICES, type ExistingOutputsChoice, existingOutputsQuestion } from "./messages";
 
 export type OutputStream = "stdout" | "stderr";
 
@@ -30,6 +31,8 @@ export interface Terminal {
   askDestination(defaultPath: string): Promise<string>;
   /** Ask for the output directory of a Batch; an empty answer takes `defaultDir`. */
   askOutputDirectory(defaultDir: string): Promise<string>;
+  /** Ask once what to do about output files that already exist: overwrite all, skip them or cancel. */
+  askExistingOutputs(outputPaths: readonly string[]): Promise<ExistingOutputsChoice>;
   /** Ask a yes/no question. */
   confirm(question: string, defaultAnswer: boolean): Promise<boolean>;
 
@@ -173,6 +176,14 @@ export class InteractiveTerminal implements Terminal {
       }
       return true;
     });
+  }
+
+  async askExistingOutputs(outputPaths: readonly string[]): Promise<ExistingOutputsChoice> {
+    console.log(["\nThese output files already exist:", ...outputPaths.map((output) => `  - ${output}`)].join("\n"));
+    return cancellable(select<ExistingOutputsChoice>({
+      message: `${existingOutputsQuestion(outputPaths.length)}:`,
+      choices: EXISTING_OUTPUTS_CHOICES.map((choice) => ({ value: choice.value, name: choice.name })),
+    }));
   }
 
   async confirm(question: string, defaultAnswer: boolean): Promise<boolean> {

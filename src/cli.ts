@@ -4,7 +4,7 @@ import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertImage } from "./converter";
-import { existingOutputs, planConversions, skipExistingOutputs } from "./plan";
+import { type ConversionPlan, existingOutputs, planConversions, skipExistingOutputs } from "./plan";
 import { HELP_TEXT, UsageError, parseCommand } from "./command";
 import { type ConvertSettings, fillIn } from "./settings";
 import {
@@ -67,16 +67,27 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     terminal.say(settingsText(settings));
   }
 
-  if (existingOutputs(plan).length > 0 && !settings.overwrite) {
-    skipExistingOutputs(plan);
+  // Existing outputs: --overwrite replaces them; otherwise ask once, or skip them in an Unattended Run.
+  const existing = existingOutputs(plan);
+  if (existing.length > 0 && !settings.overwrite) {
+    const choice = settings.unattended
+      ? "skip"
+      : await terminal.askExistingOutputs(existing.map((conversion) => conversion.output));
+    if (choice === "cancel") {
+      terminal.say(cancelledText(plan));
+      return ExitCode.Cancelled;
+    }
+    if (choice === "skip") {
+      skipExistingOutputs(plan);
+    }
   }
 
   const toRun = plan.conversions.filter((conversion) => !conversion.skip);
 
   if (!settings.unattended && toRun.length > 0) {
-    const question = plan.batch ? `Convert ${plan.conversions.length} files?` : "Proceed with conversion?";
+    const question = plan.batch ? `Convert ${toRun.length} files?` : "Proceed with conversion?";
     if (!(await terminal.confirm(question, true))) {
-      terminal.say(plan.batch ? "Batch conversion cancelled." : "Conversion cancelled.");
+      terminal.say(cancelledText(plan));
       return ExitCode.Cancelled;
     }
   }
@@ -99,6 +110,10 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
   };
   report(summary, plan.batch, terminal);
   return results.some((result) => !result.success) ? ExitCode.ConversionFailed : ExitCode.Success;
+}
+
+function cancelledText(plan: ConversionPlan): string {
+  return plan.batch ? "Batch conversion cancelled." : "Conversion cancelled.";
 }
 
 function report(summary: RunSummary, batch: boolean, terminal: Terminal): void {

@@ -75,7 +75,7 @@ const FLAGS = {
 type FlagName = keyof typeof FLAGS;
 
 function flagUsage(name: FlagName): string {
-  const flag: { short?: string; value?: string } = FLAGS[name];
+  const flag = FLAGS[name] as { short?: string; value?: string };
   return `--${name}${flag.short ? `, -${flag.short}` : ""}${flag.value ? ` <${flag.value}>` : ""}`;
 }
 
