@@ -4,7 +4,7 @@ import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertImage } from "./converter";
-import { planConversions } from "./plan";
+import { existingOutputs, planConversions, skipExistingOutputs } from "./plan";
 import { HELP_TEXT, UsageError, parseCommand } from "./command";
 import { type ConvertSettings, fillIn } from "./settings";
 import {
@@ -67,12 +67,8 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     terminal.say(settingsText(settings));
   }
 
-  if (settings.unattended) {
-    for (const conversion of plan.conversions) {
-      if (!conversion.skip && fs.existsSync(conversion.output)) {
-        conversion.skip = "output-exists";
-      }
-    }
+  if (existingOutputs(plan).length > 0 && !settings.overwrite) {
+    skipExistingOutputs(plan);
   }
 
   const toRun = plan.conversions.filter((conversion) => !conversion.skip);

@@ -678,6 +678,66 @@ describe("main", () => {
       expect(fs.readdirSync(dir).sort()).toEqual(["photo.png", "photo.png.webp", "photo.webp"]);
     });
 
+    describe("existing outputs in an Unattended Run", () => {
+      it("a Batch skips them and reports them as skipped", async () => {
+        await writeImage("a.png");
+        await writeImage("b.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(path.join(out, "b.webp"), "utf8")).toBe("old");
+        expect(await formatOf(path.join(out, "a.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
+        expect(terminal.stdout).toContain(
+          `\nSkipped files:\n  - ${path.join(dir, "b.png")}: ${path.join(out, "b.webp")} already exists\n`,
+        );
+      });
+
+      it("a Batch with --overwrite replaces them", async () => {
+        await writeImage("b.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(await formatOf(path.join(out, "b.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 0\n");
+      });
+
+      it("a single-file run skips it, says so and exits 0", async () => {
+        const source = await writeImage("photo.png");
+        fs.writeFileSync(path.join(dir, "photo.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(path.join(dir, "photo.webp"), "utf8")).toBe("old");
+        expect(terminal.stdout).toEndWith(`\nSkipped ${source}: ${path.join(dir, "photo.webp")} already exists\n`);
+        expect(terminal.stdout).not.toContain("Conversion complete");
+      });
+
+      it("a single-file run with --overwrite replaces it", async () => {
+        const source = await writeImage("photo.png");
+        fs.writeFileSync(path.join(dir, "photo.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "--overwrite", "-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(await formatOf(path.join(dir, "photo.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("\n✓ Conversion complete!\n");
+      });
+    });
+
     it("a single-file run re-encodes a same-format source to <name>.converted.<ext>, never over the source", async () => {
       const source = await writeImage("photo.png");
       const before = fs.readFileSync(source);

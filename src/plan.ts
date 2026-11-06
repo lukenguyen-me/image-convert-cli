@@ -12,6 +12,8 @@ export type Conversion = {
   source: string;
   output: string;
   skip?: SkipReason;
+  /** Whether a file is already at `output`. The run decides whether to replace it or skip. */
+  outputExists?: boolean;
 };
 
 /** Every Conversion in one run, worked out before any file is written. See GLOSSARY.md. */
@@ -25,7 +27,25 @@ export type ConversionPlan = {
 
 /** Work out the Conversion Plan for complete settings. Writes nothing. */
 export function planConversions(settings: ConvertSettings): ConversionPlan {
-  return settings.sourceIsDirectory ? planBatch(settings) : planSingle(settings);
+  const plan = settings.sourceIsDirectory ? planBatch(settings) : planSingle(settings);
+  for (const conversion of plan.conversions) {
+    if (!conversion.skip && fs.existsSync(conversion.output)) {
+      conversion.outputExists = true;
+    }
+  }
+  return plan;
+}
+
+/** The Conversions that will run but would replace an existing file. */
+export function existingOutputs(plan: ConversionPlan): Conversion[] {
+  return plan.conversions.filter((conversion) => !conversion.skip && conversion.outputExists);
+}
+
+/** Skip every Conversion that would replace an existing file. */
+export function skipExistingOutputs(plan: ConversionPlan): void {
+  for (const conversion of existingOutputs(plan)) {
+    conversion.skip = "output-exists";
+  }
 }
 
 /**
