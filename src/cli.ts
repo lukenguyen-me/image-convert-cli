@@ -109,7 +109,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     totalElapsed: Date.now() - startTime,
   };
   report(summary, plan.batch, terminal);
-  return results.some((result) => !result.success) ? ExitCode.ConversionFailed : ExitCode.Success;
+  return results.some((result) => !result.success) ? ExitCode.Failed : ExitCode.Success;
 }
 
 function cancelledText(plan: ConversionPlan): string {
@@ -141,7 +141,7 @@ async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updat
     latestVersion = await updater.latestVersion();
   } catch (error) {
     terminal.error(`Error checking for updates: ${(error as Error).message}`);
-    return ExitCode.Success;
+    return ExitCode.Failed;
   }
 
   if (latestVersion === version) {
@@ -157,20 +157,22 @@ async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updat
     return ExitCode.Cancelled;
   }
 
-  await install(latestVersion, terminal, updater);
-  return ExitCode.Success;
+  return install(latestVersion, terminal, updater);
 }
 
-async function install(version: string, terminal: Terminal, updater: Updater): Promise<void> {
+async function install(version: string, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   terminal.say("Updating image-convert-cli...");
   const outcome = await updater.install(version, (chunk, stream) => terminal.relay(chunk, stream));
   if (outcome.status === "installed") {
     terminal.say("Update completed successfully.");
-  } else if (outcome.status === "exited") {
+    return ExitCode.Success;
+  }
+  if (outcome.status === "exited") {
     terminal.error(`Update failed with exit code: ${outcome.exitCode}`);
   } else {
     terminal.error(`Update failed: ${outcome.message}`);
   }
+  return ExitCode.Failed;
 }
 
 function currentVersion(): string {

@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - `-y` no longer turns on Compress for single files. Compress is on only with `-c`.
 - An Unattended Run (`-y`) never prompts: without `--dest` it writes next to the source.
 - Unattended Runs skip output files that already exist unless `--overwrite` is given. Single-file runs no longer overwrite silently.
-- Exit codes: 0 on success, 1 when a Conversion or any file in a Batch fails, 2 for a usage error, 130 when you cancel.
+- Exit codes: 0 on success, 1 when a Conversion or any file in a Batch fails or `imgc update` can't look up or install the latest version, 2 for a usage error, 130 when you cancel.
 - A bad or unknown flag, a bad `--format`, a missing `--source`/`--format` with `-y`, or a source that isn't a known Input Format exits 2 with an error and a pointer to `imgc --help`.
 - `imgc update` accepts only `-y`, and `imgc version` accepts no flags: a conversion flag such as `-c` or `--source` there exits 2 instead of being ignored.
 - Declining a confirmation or pressing Ctrl-C at a prompt exits 130.

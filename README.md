@@ -118,7 +118,7 @@ imgc -y -s photo.png -f webp
 | Code | Meaning |
 |------|---------|
 | 0 | Success (including runs where files were skipped) |
-| 1 | A Conversion failed, or any file in a Batch failed |
+| 1 | A Conversion failed, any file in a Batch failed, or `imgc update` couldn't look up or install the latest version |
 | 2 | Usage error: a bad or unknown flag or value, a missing required flag with `-y`, or an unsupported source |
 | 130 | Cancelled: you declined a confirmation or pressed Ctrl-C |
 

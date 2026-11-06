@@ -186,18 +186,18 @@ describe("main", () => {
       });
     }
 
-    it("reports a failed version lookup and still exits 0", async () => {
+    it("reports a failed version lookup and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({ latest: new Error("Network error") });
 
       const code = await main(["update"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Error checking for updates: Network error\n");
       expect(updater.installed).toEqual([]);
     });
 
-    it("reports an installer that exits non-zero and still exits 0", async () => {
+    it("reports an installer that exits non-zero and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({
         latest: "999.0.0",
@@ -206,12 +206,12 @@ describe("main", () => {
 
       const code = await main(["update", "-y"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Update failed with exit code: 1\n");
       expect(terminal.stdout).not.toContain("Update completed successfully.");
     });
 
-    it("reports an installer that could not start and still exits 0", async () => {
+    it("reports an installer that could not start and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({
         latest: "999.0.0",
@@ -220,7 +220,7 @@ describe("main", () => {
 
       const code = await main(["update", "-y"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Update failed: spawn bun ENOENT\n");
     });
   });
