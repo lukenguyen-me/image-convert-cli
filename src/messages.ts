@@ -63,14 +63,20 @@ export function settingsText(settings: ConversionSettings): string {
 
 /** The report for a successful single-file Conversion. */
 export function conversionSuccessText(result: ConversionResult): string {
-  return [
+  const lines = [
     "\n✓ Conversion complete!",
     `  Time: ${result.elapsed}ms`,
     `  Original size: ${formatBytes(result.originalSize)}`,
     `  Output size: ${formatBytes(result.outputSize)}`,
-    `  Saved: ${(((result.originalSize - result.outputSize) / result.originalSize) * 100).toFixed(1)}%`,
-    `\nOutput saved to: ${result.destinationPath}`,
-  ].join("\n");
+  ];
+  // A share of zero bytes is meaningless, so leave the line out (as the Batch summary does).
+  if (result.originalSize > 0) {
+    lines.push(
+      `  Saved: ${(((result.originalSize - result.outputSize) / result.originalSize) * 100).toFixed(1)}%`,
+    );
+  }
+  lines.push(`\nOutput saved to: ${result.destinationPath}`);
+  return lines.join("\n");
 }
 
 /** The report for a failed single-file Conversion. */
@@ -120,4 +126,9 @@ export function batchResultText(summary: BatchConversionSummary): string {
   }
 
   return lines.join("\n");
+}
+
+/** The question asked before installing a newer version. */
+export function updatePromptText(currentVersion: string, latestVersion: string): string {
+  return `Update image-convert-cli ${currentVersion} → ${latestVersion}?`;
 }

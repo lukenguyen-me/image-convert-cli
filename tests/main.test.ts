@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { main } from "../src/cli";
-import { ScriptedTerminal } from "../src/scripted-terminal";
+import { CTRL_C, ScriptedTerminal } from "../src/scripted-terminal";
 import { InMemoryUpdater } from "../src/updater";
 import sharp from "sharp";
 import packageJson from "../package.json" with { type: "json" };
@@ -79,7 +79,7 @@ describe("main", () => {
       const code = await main(["update"], terminal, updater);
 
       expect(code).toBe(0);
-      expect(terminal.asked).toEqual(["Proceed with conversion?"]);
+      expect(terminal.asked).toEqual([`Update image-convert-cli ${current} → 999.0.0?`]);
       expect(updater.installed).toEqual(["999.0.0"]);
       expect(terminal.stdout).toBe(
         `Update available: ${current} -> 999.0.0\n` +
@@ -88,15 +88,25 @@ describe("main", () => {
       );
     });
 
-    it("installs nothing when the user declines", async () => {
+    it("installs nothing and exits 130 when the user declines", async () => {
       const terminal = new ScriptedTerminal([false]);
       const updater = new InMemoryUpdater({ latest: "999.0.0" });
 
       const code = await main(["update"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(updater.installed).toEqual([]);
       expect(terminal.stdout).toBe(`Update available: ${current} -> 999.0.0\nUpdate cancelled.\n`);
+    });
+
+    it("installs nothing and exits 130 when the user presses Ctrl-C at the prompt", async () => {
+      const terminal = new ScriptedTerminal([CTRL_C]);
+      const updater = new InMemoryUpdater({ latest: "999.0.0" });
+
+      const code = await main(["update"], terminal, updater);
+
+      expect(code).toBe(130);
+      expect(updater.installed).toEqual([]);
     });
 
     for (const flag of ["-y", "--yes"]) {
@@ -222,14 +232,14 @@ describe("main", () => {
       expect(terminal.stdout).toContain("  Compression: No\n");
     });
 
-    it("writes nothing when the user declines to proceed", async () => {
+    it("writes nothing and exits 130 when the user declines to proceed", async () => {
       const source = path.join(dir, "photo.png");
       const destination = path.join(dir, "declined.webp");
       const terminal = new ScriptedTerminal([false, false]);
 
       const code = await main(["-s", source, "-f", "webp", "-d", destination], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(fs.existsSync(destination)).toBe(false);
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
     });
@@ -259,6 +269,22 @@ describe("main", () => {
       expect(terminal.stderr).toContain(`Unsupported input format: ${source}`);
       expect(terminal.asked).toEqual([]);
       expect(fs.existsSync(destination)).toBe(false);
+    });
+
+    it("writes nothing and exits 130 when the user presses Ctrl-C at a prompt", async () => {
+      const source = path.join(dir, "photo.png");
+      const terminal = new ScriptedTerminal([source, "webp", CTRL_C]);
+
+      const code = await main([], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(130);
+      expect(terminal.asked).toEqual([
+        "Source file path",
+        "Target format",
+        `Destination path (${path.join(dir, "photo.webp")})`,
+      ]);
+      expect(fs.readdirSync(dir)).toEqual(["photo.png"]);
+      expect(terminal.stderr).toBe("");
     });
 
     it("reports a failed Conversion on stderr and exits 1", async () => {
@@ -307,14 +333,24 @@ describe("main", () => {
       expect(terminal.stdout).toContain(`\nOutput directory: ${output}\n`);
     });
 
-    it("writes nothing when the user declines", async () => {
+    it("writes nothing and exits 130 when the user declines", async () => {
       const terminal = new ScriptedTerminal([output, false, false]);
 
       const code = await main(["-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(fs.readdirSync(output)).toEqual([]);
       expect(terminal.stdout).toEndWith("Batch conversion cancelled.\n");
+    });
+
+    it("writes nothing and exits 130 when the user presses Ctrl-C at the confirmation", async () => {
+      const terminal = new ScriptedTerminal([output, false, CTRL_C]);
+
+      const code = await main(["-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(130);
+      expect(terminal.asked).toEqual([`Output directory (${source})`, "Do you want to compress the image?", "Convert 1 files?"]);
+      expect(fs.readdirSync(output)).toEqual([]);
     });
 
     it("an Unattended Run writes next to the sources and asks nothing", async () => {
@@ -328,14 +364,14 @@ describe("main", () => {
       expect(fs.existsSync(path.join(source, "photo.png"))).toBe(true);
     });
 
-    it("lists failed files in the summary and still exits 0", async () => {
+    it("lists failed files in the summary and exits 1 when any Conversion fails", async () => {
       const broken = path.join(source, "broken.png");
       fs.writeFileSync(broken, "not an image");
       const terminal = new ScriptedTerminal();
 
       const code = await main(["-y", "-s", source, "-f", "webp", "-d", output], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stdout).toContain("  Total files: 2\n  Converted: 1\n  Failed: 1\n");
       expect(terminal.stdout).toContain(`\nFailed files:\n  - ${broken}: `);
     });

@@ -7,9 +7,18 @@ import { type FormatSpelling, formatPromptChoices } from "./formats";
 
 export type OutputStream = "stdout" | "stderr";
 
+/** Thrown by any Terminal question when the user presses Ctrl-C instead of answering. */
+export class PromptCancelled extends Error {
+  constructor() {
+    super("Prompt cancelled by the user");
+    this.name = "PromptCancelled";
+  }
+}
+
 /**
  * The one place the CLI asks the user for something and tells the user something.
  * Every prompt and every line of console output goes through a Terminal.
+ * Every `ask*` method and `confirm` reject with `PromptCancelled` on Ctrl-C.
  */
 export interface Terminal {
   /** Ask for the source file or directory. */
@@ -81,7 +90,12 @@ async function inputWithPathCompletion(
     ? `${message} (${defaultValue}): `
     : `${message}: `;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    rl.on("SIGINT", () => {
+      rl.close();
+      process.stdout.write("\n");
+      reject(new PromptCancelled());
+    });
     rl.question(question, (answer) => {
       const result = answer.trim() || defaultValue || "";
       rl.close();
@@ -89,13 +103,25 @@ async function inputWithPathCompletion(
       const validationResult = validate(result);
       if (validationResult !== true) {
         console.log(`\nError: ${validationResult}`);
-        inputWithPathCompletion(message, defaultValue, validate).then(resolve);
+        inputWithPathCompletion(message, defaultValue, validate).then(resolve, reject);
         return;
       }
 
       resolve(result);
     });
   });
+}
+
+/** Turn inquirer's Ctrl-C error into the Terminal's `PromptCancelled`. */
+async function cancellable<T>(prompt: Promise<T>): Promise<T> {
+  try {
+    return await prompt;
+  } catch (error) {
+    if (error instanceof Error && error.name === "ExitPromptError") {
+      throw new PromptCancelled();
+    }
+    throw error;
+  }
 }
 
 /** The production Terminal: inquirer prompts, readline Tab completion and the console. */
@@ -113,14 +139,14 @@ export class InteractiveTerminal implements Terminal {
   }
 
   async askFormat(): Promise<FormatSpelling> {
-    return select<FormatSpelling>({
+    return cancellable(select<FormatSpelling>({
       message: "Target format:",
       choices: formatPromptChoices().map((choice) => ({
         value: choice.spelling,
         name: choice.label,
         description: choice.description,
       })),
-    });
+    }));
   }
 
   async askDestination(defaultPath: string): Promise<string> {
@@ -149,7 +175,7 @@ export class InteractiveTerminal implements Terminal {
   }
 
   async confirm(question: string, defaultAnswer: boolean): Promise<boolean> {
-    return confirm({ message: question, default: defaultAnswer });
+    return cancellable(confirm({ message: question, default: defaultAnswer }));
   }
 
   say(text: string): void {
