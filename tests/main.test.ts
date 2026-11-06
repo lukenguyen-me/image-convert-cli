@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { main } from "../src/cli";
 import { CTRL_C, ScriptedTerminal } from "../src/scripted-terminal";
 import { InMemoryUpdater } from "../src/updater";
+import { encode } from "../src/formats";
 import sharp from "sharp";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -12,6 +13,16 @@ const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
   "base64",
 );
+
+/** A 16×16 colour gradient: detailed enough that compressed and plain WebP differ. */
+async function writeGradientPng(filePath: string): Promise<void> {
+  const size = 16;
+  const pixels = Buffer.alloc(size * size * 3);
+  for (let i = 0; i < size * size; i++) {
+    pixels.set([(i * 7) % 256, (i * 13) % 256, (i * 29) % 256], i * 3);
+  }
+  await sharp(pixels, { raw: { width: size, height: size, channels: 3 } }).png().toFile(filePath);
+}
 
 describe("main", () => {
   describe("--help", () => {
@@ -23,10 +34,32 @@ describe("main", () => {
       expect(code).toBe(0);
       expect(terminal.stdout).toContain("Image Converter CLI");
       expect(terminal.stdout).toContain("imgc -y --source <path> --format <format>");
-      expect(terminal.stdout).toContain("--format, -f     Target format: webp, jpeg, jpg, png, or ico");
-      expect(terminal.stdout).toContain("Input formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg");
+      expect(terminal.stdout).toMatch(/--format, -f <format> +Output Format: webp, jpeg, jpg, png, ico \(required with -y\)\n/);
+      expect(terminal.stdout).toContain("Input Formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg\n");
+      expect(terminal.stdout).toMatch(/--compress, -c +Compress the output \(default: off\)\n/);
       expect(terminal.stderr).toBe("");
       expect(terminal.asked).toEqual([]);
+    });
+
+    it("lists only flags the parser accepts, in both long and short form", async () => {
+      const help = new ScriptedTerminal();
+      await main(["--help"], help, new InMemoryUpdater());
+      const listed = [...help.stdout.matchAll(/^ {2}(--[a-z]+), (-[a-z])(?: <[a-z]+>)?/gm)];
+
+      expect(listed.map(([, long]) => long)).toEqual([
+        "--help", "--version", "--source", "--format", "--dest", "--compress", "--yes",
+      ]);
+      for (const [usage, long, short] of listed) {
+        for (const flag of [long!, short!]) {
+          // --help comes first so each flag is only parsed, never acted on.
+          const argv = usage.includes("<") ? ["--help", flag, "webp"] : ["--help", flag];
+          const terminal = new ScriptedTerminal();
+
+          const code = await main(argv, terminal, new InMemoryUpdater());
+
+          expect({ flag, code, stderr: terminal.stderr }).toEqual({ flag, code: 0, stderr: "" });
+        }
+      }
     });
   });
 
@@ -44,17 +77,40 @@ describe("main", () => {
     }
   });
 
-  describe("-y without --source and --format", () => {
-    it("reports the error, prints help, asks nothing and exits 0", async () => {
-      const terminal = new ScriptedTerminal();
+  describe("usage errors", () => {
+    // argv → a fragment the error must contain, naming the problem.
+    const cases: [argv: string[], names: string][] = [
+      [["-s", "photo.png", "--format", "gif"], "--format 'gif'"],
+      [["-s", "photo.png", "-f", "WEBP"], "--format 'WEBP'"],
+      [["--fromat", "webp"], "'--fromat'"],
+      [["-x"], "'-x'"],
+      [["--source"], "--source needs a value"],
+      [["-s"], "--source needs a value"],
+      [["--source", "-f", "webp"], "--source needs a value"],
+      [["-s", "", "-f", "webp"], "--source needs a value"],
+      [["-s", "photo.png", "--format"], "--format needs a value"],
+      [["-s", "photo.png", "-f", "webp", "--dest"], "--dest needs a value"],
+      [["-y", "-s", "photo.png"], "--format is required with -y"],
+      [["-y", "-f", "webp"], "--source is required with -y"],
+      [["-y"], "--source is required with -y"],
+      [["convert", "-s", "photo.png"], "'convert'"],
+      [["update", "--fromat"], "'--fromat'"],
+    ];
 
-      const code = await main(["-y", "-s", "photo.png"], terminal, new InMemoryUpdater());
+    for (const [argv, names] of cases) {
+      it(`\`imgc ${argv.join(" ")}\` exits 2 naming ${names} and pointing to --help`, async () => {
+        const terminal = new ScriptedTerminal();
+        const updater = new InMemoryUpdater({ latest: "999.0.0" });
 
-      expect(code).toBe(0);
-      expect(terminal.stderr).toBe("Error: -y mode requires --source and --format arguments\n");
-      expect(terminal.stdout).toContain("Image Converter CLI");
-      expect(terminal.asked).toEqual([]);
-    });
+        const code = await main(argv, terminal, updater);
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(names);
+        expect(terminal.stderr).toEndWith("Run 'imgc --help' for usage.\n");
+        expect(terminal.asked).toEqual([]);
+        expect(updater.installed).toEqual([]);
+      });
+    }
   });
 
   describe("update", () => {
@@ -193,23 +249,22 @@ describe("main", () => {
           `  Source: ${source}\n` +
           "  Target format: WEBP\n" +
           `  Destination: ${destination}\n` +
-          // Today -y turns compression on (spec #1 changes this).
-          "  Compression: Yes\n",
+          // -y only skips prompts; it never turns on Compress.
+          "  Compression: No\n",
       );
       expect(terminal.stdout).toContain("\n✓ Conversion complete!\n");
       expect(terminal.stdout).toContain(`\nOutput saved to: ${destination}\n`);
       expect(terminal.stderr).toBe("");
     });
 
-    it("-y without --dest still asks for the destination, offering one next to the source", async () => {
-      // Today's behaviour, kept by this prefactor (spec #1 changes this).
+    it("-y without --dest writes next to the source and asks nothing", async () => {
       const source = path.join(dir, "photo.png");
-      const terminal = new ScriptedTerminal([""]);
+      const terminal = new ScriptedTerminal();
 
       const code = await main(["-y", "-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
 
       expect(code).toBe(0);
-      expect(terminal.asked).toEqual([`Destination path (${path.join(dir, "photo.webp")})`]);
+      expect(terminal.asked).toEqual([]);
       expect(fs.existsSync(path.join(dir, "photo.webp"))).toBe(true);
     });
 
@@ -247,17 +302,17 @@ describe("main", () => {
     for (const spelling of ["jpeg", "jpg"]) {
       it(`--format ${spelling} offers a .${spelling} destination and writes it`, async () => {
         const source = path.join(dir, "photo.png");
-        const terminal = new ScriptedTerminal([""]);
+        const terminal = new ScriptedTerminal(["", false, true]);
 
-        const code = await main(["-y", "-s", source, "-f", spelling], terminal, new InMemoryUpdater());
+        const code = await main(["-s", source, "-f", spelling], terminal, new InMemoryUpdater());
 
         expect(code).toBe(0);
-        expect(terminal.asked).toEqual([`Destination path (${path.join(dir, `photo.${spelling}`)})`]);
+        expect(terminal.asked[0]).toBe(`Destination path (${path.join(dir, `photo.${spelling}`)})`);
         expect((await sharp(path.join(dir, `photo.${spelling}`)).metadata()).format).toBe("jpeg");
       });
     }
 
-    it("a source that is not a known Input Format fails with an unsupported input format message", async () => {
+    it("a source that is not a known Input Format is a usage error", async () => {
       const source = path.join(dir, "photo.bmp");
       fs.copyFileSync(path.join(dir, "photo.png"), source);
       const destination = path.join(dir, "photo.webp");
@@ -265,7 +320,7 @@ describe("main", () => {
 
       const code = await main(["-y", "-s", source, "-f", "webp", "-d", destination], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(1);
+      expect(code).toBe(2);
       expect(terminal.stderr).toContain(`Unsupported input format: ${source}`);
       expect(terminal.asked).toEqual([]);
       expect(fs.existsSync(destination)).toBe(false);
@@ -398,6 +453,142 @@ describe("main", () => {
 
       expect(code).toBe(0);
       expect(fs.existsSync(path.join(output, "photo.webp"))).toBe(true);
+    });
+  });
+
+  describe("~ in paths", () => {
+    let home: string;
+    const originalHome = process.env.HOME;
+
+    beforeEach(() => {
+      home = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-home-"));
+      process.env.HOME = home;
+      fs.writeFileSync(path.join(home, "x.png"), ONE_PIXEL_PNG);
+    });
+
+    afterEach(() => {
+      process.env.HOME = originalHome;
+      fs.rmSync(home, { recursive: true, force: true });
+    });
+
+    it("--source ~/x.png resolves to the home directory", async () => {
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "--source", "~/x.png", "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.stdout).toContain(`  Source: ${path.join(home, "x.png")}\n`);
+      expect(fs.existsSync(path.join(home, "x.webp"))).toBe(true);
+    });
+
+    it("a typed ~/x.png at the source prompt resolves to the home directory", async () => {
+      const terminal = new ScriptedTerminal(["~/x.png", "webp", "", false, true]);
+
+      const code = await main([], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.asked[2]).toBe(`Destination path (${path.join(home, "x.webp")})`);
+      expect(fs.existsSync(path.join(home, "x.webp"))).toBe(true);
+    });
+
+    it("--dest ~/out.webp and a typed ~/typed.webp destination resolve to the home directory", async () => {
+      const flagged = await main(
+        ["-y", "-s", path.join(home, "x.png"), "-f", "webp", "--dest", "~/out.webp"],
+        new ScriptedTerminal(),
+        new InMemoryUpdater(),
+      );
+      const typed = await main(
+        ["-s", path.join(home, "x.png"), "-f", "webp"],
+        new ScriptedTerminal(["~/typed.webp", false, true]),
+        new InMemoryUpdater(),
+      );
+
+      expect([flagged, typed]).toEqual([0, 0]);
+      expect(fs.existsSync(path.join(home, "out.webp"))).toBe(true);
+      expect(fs.existsSync(path.join(home, "typed.webp"))).toBe(true);
+    });
+
+    it("a Batch accepts ~ in --source and --dest", async () => {
+      fs.mkdirSync(path.join(home, "out"));
+
+      const code = await main(["-y", "-s", "~", "-f", "webp", "-d", "~/out"], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.existsSync(path.join(home, "out", "x.webp"))).toBe(true);
+    });
+  });
+
+  describe("Compress", () => {
+    let dir: string;
+    let compressed: Buffer;
+    let plain: Buffer;
+
+    beforeEach(async () => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-compress-"));
+      fs.mkdirSync(path.join(dir, "in"));
+      fs.mkdirSync(path.join(dir, "ref"));
+      for (const name of ["a.png", "b.png"]) {
+        await writeGradientPng(path.join(dir, "in", name));
+      }
+      // Reference outputs, made by the Output Format module's own WebP recipe.
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "compressed.webp"), "webp", { compress: true });
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "plain.webp"), "webp", { compress: false });
+      compressed = fs.readFileSync(path.join(dir, "ref", "compressed.webp"));
+      plain = fs.readFileSync(path.join(dir, "ref", "plain.webp"));
+      expect(compressed.equals(plain)).toBe(false);
+    });
+
+    afterEach(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("`-y -s a.png -f webp -c` writes compressed output", async () => {
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", path.join(dir, "in", "a.png"), "-f", "webp", "-c"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.stdout).toContain("  Compression: Yes\n");
+      expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(compressed);
+    });
+
+    it("`-y -s a.png -f webp` writes uncompressed output", async () => {
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", path.join(dir, "in", "a.png"), "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(plain);
+    });
+
+    it("an interactive run with -c compresses without asking about it", async () => {
+      const terminal = new ScriptedTerminal(["", true]);
+
+      const code = await main(["-s", path.join(dir, "in", "a.png"), "-f", "webp", "--compress"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.asked).toEqual([`Destination path (${path.join(dir, "in", "a.webp")})`, "Proceed with conversion?"]);
+      expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(compressed);
+    });
+
+    it("a Batch with `-y -c` compresses every Conversion", async () => {
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-c", "-s", path.join(dir, "in"), "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(compressed);
+      expect(fs.readFileSync(path.join(dir, "in", "b.webp"))).toEqual(compressed);
+    });
+
+    it("a Batch with `-y` alone compresses nothing", async () => {
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", path.join(dir, "in"), "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(plain);
+      expect(fs.readFileSync(path.join(dir, "in", "b.webp"))).toEqual(plain);
     });
   });
 });
