@@ -1,8 +1,6 @@
 import type { FormatSpelling } from "./formats";
 import type { SkippedConversion } from "./plan";
 
-export type { FormatSpelling } from "./formats";
-
 /** The outcome of one Conversion that ran, in a single-file run or a Batch. */
 export type ConversionResult = {
   success: boolean;
