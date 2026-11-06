@@ -21,6 +21,8 @@ export type ConvertRequest = {
   compress?: true;
   /** -y: an Unattended Run, which never prompts. */
   unattended: boolean;
+  /** --overwrite: replace existing output files without asking. */
+  overwrite: boolean;
 };
 
 /** What one `imgc` invocation asks for. */
@@ -61,16 +63,20 @@ const FLAGS = {
     short: "y",
     help: ["Unattended Run: never prompt; settings not given take their defaults"],
   },
+  overwrite: {
+    type: "boolean",
+    help: ["Replace output files that already exist (default: ask, or skip them with -y)"],
+  },
 } as const satisfies Record<
   string,
-  { type: "string" | "boolean"; short: string; value?: string; help: readonly string[] }
+  { type: "string" | "boolean"; short?: string; value?: string; help: readonly string[] }
 >;
 
 type FlagName = keyof typeof FLAGS;
 
 function flagUsage(name: FlagName): string {
-  const flag: { short: string; value?: string } = FLAGS[name];
-  return `--${name}, -${flag.short}${flag.value ? ` <${flag.value}>` : ""}`;
+  const flag: { short?: string; value?: string } = FLAGS[name];
+  return `--${name}${flag.short ? `, -${flag.short}` : ""}${flag.value ? ` <${flag.value}>` : ""}`;
 }
 
 function optionsHelp(): string {
@@ -146,6 +152,7 @@ export function parseCommand(argv: string[]): Command {
       destination: values.dest,
       compress: values.compress ? true : undefined,
       unattended: values.yes === true,
+      overwrite: values.overwrite === true,
     },
   };
 }
@@ -166,9 +173,10 @@ function toUsageError(error: Error & { code?: string }): Error {
   }
   if (error.code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
     const quoted = error.message.match(/'([^']+)'/)?.[1] ?? "";
-    const name = (Object.keys(FLAGS) as FlagName[]).find((flag) =>
-      quoted.split(/[\s,]+/).some((token) => token === `--${flag}` || token === `-${FLAGS[flag].short}`),
-    );
+    const name = (Object.keys(FLAGS) as FlagName[]).find((flag) => {
+      const short: string | undefined = (FLAGS[flag] as { short?: string }).short;
+      return quoted.split(/[\s,]+/).some((token) => token === `--${flag}` || (short && token === `-${short}`));
+    });
     return new UsageError(name ? `--${name} needs a value` : error.message);
   }
   return error;

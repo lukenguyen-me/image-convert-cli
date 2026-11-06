@@ -17,6 +17,8 @@ export type ConvertSettings = {
   destination: string;
   compress: boolean;
   unattended: boolean;
+  /** Replace existing output files without asking. */
+  overwrite: boolean;
 };
 
 /**
@@ -60,7 +62,15 @@ export async function fillIn(request: ConvertRequest, terminal: Terminal): Promi
     request.compress ??
     (await ask("--compress", () => terminal.confirm("Do you want to compress the image?", false), () => false));
 
-  return { source, sourceIsDirectory, format, destination, compress, unattended: request.unattended };
+  return {
+    source,
+    sourceIsDirectory,
+    format,
+    destination,
+    compress,
+    unattended: request.unattended,
+    overwrite: request.overwrite,
+  };
 }
 
 /**

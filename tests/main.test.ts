@@ -44,13 +44,13 @@ describe("main", () => {
     it("lists only flags the parser accepts, in both long and short form", async () => {
       const help = new ScriptedTerminal();
       await main(["--help"], help, new InMemoryUpdater());
-      const listed = [...help.stdout.matchAll(/^ {2}(--[a-z]+), (-[a-z])(?: <[a-z]+>)?/gm)];
+      const listed = [...help.stdout.matchAll(/^ {2}(--[a-z]+)(?:, (-[a-z]))?(?: <[a-z]+>)?/gm)];
 
       expect(listed.map(([, long]) => long)).toEqual([
-        "--help", "--version", "--source", "--format", "--dest", "--compress", "--yes",
+        "--help", "--version", "--source", "--format", "--dest", "--compress", "--yes", "--overwrite",
       ]);
       for (const [usage, long, short] of listed) {
-        for (const flag of [long!, short!]) {
+        for (const flag of short ? [long!, short] : [long!]) {
           // --help comes first so each flag is only parsed, never acted on.
           const argv = usage.includes("<") ? ["--help", flag, "webp"] : ["--help", flag];
           const terminal = new ScriptedTerminal();
@@ -664,6 +664,18 @@ describe("main", () => {
       expect(fs.readFileSync(already)).toEqual(before);
       expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
       expect(terminal.stdout).toContain(`\nSkipped files:\n  - ${already}: already WebP\n`);
+    });
+
+    it("a Batch never writes over one of its own sources, even with --overwrite", async () => {
+      await writeImage("photo.png");
+      const already = await writeImage("photo.webp");
+      const before = fs.readFileSync(already);
+
+      const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp"], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(already)).toEqual(before);
+      expect(fs.readdirSync(dir).sort()).toEqual(["photo.png", "photo.png.webp", "photo.webp"]);
     });
 
     it("a single-file run re-encodes a same-format source to <name>.converted.<ext>, never over the source", async () => {

@@ -58,13 +58,14 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
   );
 
   // Sources that would share an output name keep their source extension: photo.png → photo.png.webp.
+  // So does a source whose output would land on another source, such as a skipped photo.webp.
   const runnable = conversions.filter((conversion) => !conversion.skip);
-  const counts = new Map<string, number>();
+  const counts = new Map<string, number>(sources.map((source) => [path.resolve(source), 1]));
   for (const { output } of runnable) {
-    counts.set(output, (counts.get(output) ?? 0) + 1);
+    counts.set(path.resolve(output), (counts.get(path.resolve(output)) ?? 0) + 1);
   }
   for (const conversion of runnable) {
-    if (counts.get(conversion.output)! > 1) {
+    if (counts.get(path.resolve(conversion.output))! > 1) {
       conversion.output = outputPath(destination, path.basename(conversion.source), format);
     }
   }
