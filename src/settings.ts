@@ -1,17 +1,14 @@
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type ConvertRequest, UsageError } from "./command";
 import { type FormatSpelling, findInputFormat } from "./formats";
 import type { Terminal } from "./terminal";
 import { unsupportedInputFormatText } from "./messages";
-import { defaultOutputPath } from "./plan";
+import { defaultOutputPath, isBatchSource } from "./plan";
 
 /** Complete convert settings: every field the run needs, after the fill-in step. */
 export type ConvertSettings = {
   source: string;
-  /** Whether the source is a directory, i.e. the run is a Batch. */
-  sourceIsDirectory: boolean;
   format: FormatSpelling;
   /** The output file, or for a Batch the output directory. */
   destination: string;
@@ -38,20 +35,20 @@ export async function fillIn(request: ConvertRequest, terminal: Terminal): Promi
   };
 
   const source = expandHome(request.source ?? (await ask("--source", () => terminal.askSourcePath())));
-  const sourceIsDirectory = isDirectory(source);
-  if (!sourceIsDirectory && !findInputFormat(source)) {
+  const batch = isBatchSource(source);
+  if (!batch && !findInputFormat(source)) {
     throw new UsageError(unsupportedInputFormatText(source));
   }
 
   const format = request.format ?? (await ask("--format", () => terminal.askFormat()));
 
-  const defaultDestination = sourceIsDirectory ? source : defaultOutputPath(source, format);
+  const defaultDestination = batch ? source : defaultOutputPath(source, format);
   const destination = expandHome(
     request.destination ??
       (await ask(
         "--dest",
         () =>
-          sourceIsDirectory
+          batch
             ? terminal.askOutputDirectory(defaultDestination)
             : terminal.askDestination(defaultDestination),
         () => defaultDestination,
@@ -64,7 +61,6 @@ export async function fillIn(request: ConvertRequest, terminal: Terminal): Promi
 
   return {
     source,
-    sourceIsDirectory,
     format,
     destination,
     compress,
@@ -83,12 +79,4 @@ export function expandHome(filePath: string): string {
   }
   const home = process.env.HOME || os.homedir();
   return path.join(home, filePath.slice(1));
-}
-
-function isDirectory(filePath: string): boolean {
-  try {
-    return fs.statSync(filePath).isDirectory();
-  } catch {
-    return false;
-  }
 }

@@ -30,13 +30,18 @@ export type ConversionPlan = {
 
 /** Work out the Conversion Plan for complete settings. Writes nothing. */
 export function planConversions(settings: ConvertSettings): ConversionPlan {
-  const plan = settings.sourceIsDirectory ? planBatch(settings) : planSingle(settings);
+  const plan = isBatchSource(settings.source) ? planBatch(settings) : planSingle(settings);
   for (const conversion of plan.conversions) {
     if (!conversion.skip && fs.existsSync(conversion.output)) {
       conversion.outputExists = true;
     }
   }
   return plan;
+}
+
+/** Whether a source makes the run a Batch: it is a directory. */
+export function isBatchSource(source: string): boolean {
+  return isDirectory(source);
 }
 
 /** The Conversions that will run. */

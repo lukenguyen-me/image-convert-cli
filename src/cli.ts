@@ -70,9 +70,8 @@ async function run(argv: string[], terminal: Terminal, updater: Updater): Promis
 async function runConvert(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
   const startTime = Date.now();
   const plan = planConversions(settings);
-  if (!plan.batch) {
-    terminal.say(settingsText(settings));
-  }
+  const style = plan.batch ? BATCH : SINGLE_FILE;
+  style.intro(settings, terminal);
 
   // Existing outputs: --overwrite replaces them; otherwise ask once, or skip them in an Unattended Run.
   const existing = existingOutputs(plan);
@@ -81,7 +80,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
       ? "skip"
       : await terminal.askExistingOutputs(existing.map((conversion) => conversion.output));
     if (choice === "cancel") {
-      terminal.say(cancelledText(plan));
+      terminal.say(style.cancelledText);
       return ExitCode.Cancelled;
     }
     if (choice === "skip") {
@@ -92,16 +91,13 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
   const toRun = runnableConversions(plan);
 
   if (!settings.unattended && toRun.length > 0) {
-    const question = plan.batch ? `Convert ${toRun.length} files?` : "Proceed with conversion?";
-    if (!(await terminal.confirm(question, true))) {
-      terminal.say(cancelledText(plan));
+    if (!(await terminal.confirm(style.confirmQuestion(toRun.length), true))) {
+      terminal.say(style.cancelledText);
       return ExitCode.Cancelled;
     }
   }
 
-  if (plan.batch) {
-    fs.mkdirSync(plan.outputDirectory, { recursive: true });
-  }
+  style.prepare(plan);
   const results: ConversionResult[] = [];
   for (const conversion of toRun) {
     results.push(await convertImage(conversion, settings));
@@ -115,30 +111,48 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     skipped: skippedConversions(plan),
     totalElapsed: Date.now() - startTime,
   };
-  report(summary, plan.batch, terminal);
+  style.report(summary, terminal);
   return results.some((result) => !result.success) ? ExitCode.Failed : ExitCode.Success;
 }
 
-function cancelledText(plan: ConversionPlan): string {
-  return plan.batch ? "Batch conversion cancelled." : "Conversion cancelled.";
+/** What differs between a single-file run and a Batch. Each run picks one, once. */
+interface RunStyle {
+  /** Say what is about to happen, once the plan is made. */
+  intro(settings: ConvertSettings, terminal: Terminal): void;
+  /** The confirmation asked before `count` Conversions run. */
+  confirmQuestion(count: number): string;
+  cancelledText: string;
+  /** Make sure the outputs have somewhere to go. */
+  prepare(plan: ConversionPlan): void;
+  report(summary: RunSummary, terminal: Terminal): void;
 }
 
-function report(summary: RunSummary, batch: boolean, terminal: Terminal): void {
-  if (batch) {
-    terminal.say(batchResultText(summary));
-    return;
-  }
-  for (const result of summary.results) {
-    if (result.success) {
-      terminal.say(conversionSuccessText(result));
-    } else {
-      terminal.error(conversionFailureText(result));
+const SINGLE_FILE: RunStyle = {
+  intro: (settings, terminal) => terminal.say(settingsText(settings)),
+  confirmQuestion: () => "Proceed with conversion?",
+  cancelledText: "Conversion cancelled.",
+  prepare: () => {},
+  report(summary, terminal) {
+    for (const result of summary.results) {
+      if (result.success) {
+        terminal.say(conversionSuccessText(result));
+      } else {
+        terminal.error(conversionFailureText(result));
+      }
     }
-  }
-  for (const conversion of summary.skipped) {
-    terminal.say(conversionSkippedText(conversion, summary.format));
-  }
-}
+    for (const conversion of summary.skipped) {
+      terminal.say(conversionSkippedText(conversion, summary.format));
+    }
+  },
+};
+
+const BATCH: RunStyle = {
+  intro: () => {},
+  confirmQuestion: (count) => `Convert ${count} files?`,
+  cancelledText: "Batch conversion cancelled.",
+  prepare: (plan) => fs.mkdirSync(plan.outputDirectory, { recursive: true }),
+  report: (summary, terminal) => terminal.say(batchResultText(summary)),
+};
 
 async function runUpdate(autoInstall: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   const version = currentVersion();
