@@ -1,6 +1,7 @@
 import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
-import type { Terminal } from "./terminal";
+import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
+import { ExitCode } from "./exit-codes";
 import { convertBatch, convertImage } from "./converter";
 import { getDefaultDestinationPath, getImageFilesFromDirectory, isDirectory } from "./utils/path";
 import {
@@ -10,19 +11,30 @@ import {
   conversionFailureText,
   conversionSuccessText,
   settingsText,
+  updatePromptText,
 } from "./messages";
 import packageJson from "../package.json" with { type: "json" };
 
 /**
  * Run `imgc` with the given arguments (without the executable and script path).
  * All asking and telling goes through `terminal`; all version lookups and installs
- * go through `updater`. Returns the process exit code; never exits the process.
+ * go through `updater`. Returns the process exit code (see `ExitCode`); never exits the process.
  */
 export async function main(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
+  try {
+    return await run(argv, terminal, updater);
+  } catch (error) {
+    if (error instanceof PromptCancelled) {
+      return ExitCode.Cancelled;
+    }
+    throw error;
+  }
+}
+
+async function run(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
   if (argv[0] === "update") {
     const autoUpdate = argv.includes("--yes") || argv.includes("-y");
-    await runUpdate(autoUpdate, terminal, updater);
-    return 0;
+    return runUpdate(autoUpdate, terminal, updater);
   }
 
   const options = parseArgs(argv);
@@ -46,15 +58,14 @@ export async function main(argv: string[], terminal: Terminal, updater: Updater)
   return runConvert(options, terminal);
 }
 
-async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<number> {
+async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<ExitCode> {
   terminal.say(BANNER);
 
   const sourcePath = options.source || (await terminal.askSourcePath());
   const targetFormat = options.format || (await terminal.askFormat());
 
   if (isDirectory(sourcePath)) {
-    await runBatch(sourcePath, targetFormat, options, terminal);
-    return 0;
+    return runBatch(sourcePath, targetFormat, options, terminal);
   }
 
   const destinationPath =
@@ -77,17 +88,17 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
 
   if (!shouldProceed) {
     terminal.say("Conversion cancelled.");
-    return 0;
+    return ExitCode.Cancelled;
   }
 
   const result = await convertImage(sourcePath, destinationPath, targetFormat, compress);
 
   if (result.success) {
     terminal.say(conversionSuccessText(result));
-    return 0;
+    return ExitCode.Success;
   }
   terminal.error(conversionFailureText(result));
-  return 1;
+  return ExitCode.ConversionFailed;
 }
 
 async function runBatch(
@@ -95,7 +106,7 @@ async function runBatch(
   targetFormat: SupportedFormat,
   options: ConvertOptions,
   terminal: Terminal,
-): Promise<void> {
+): Promise<ExitCode> {
   const yesMode = options.yes === true;
 
   // Destination directory defaults to the source directory
@@ -111,7 +122,7 @@ async function runBatch(
     const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
     if (!shouldProceed) {
       terminal.say("Batch conversion cancelled.");
-      return;
+      return ExitCode.Cancelled;
     }
   }
 
@@ -125,30 +136,35 @@ async function runBatch(
 
   const summary = await convertBatch(settings);
   terminal.say(batchResultText(summary));
+  return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
 }
 
-async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<void> {
+async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   const version = currentVersion();
 
+  let latestVersion: string;
   try {
-    const latestVersion = await updater.latestVersion();
-
-    if (latestVersion === version) {
-      terminal.say(`You are running the latest version: ${version}`);
-    } else {
-      terminal.say(`Update available: ${version} -> ${latestVersion}`);
-
-      // Today's update prompt reuses the conversion confirmation wording.
-      const shouldUpdate = autoUpdate || (await terminal.confirm("Proceed with conversion?", true));
-      if (shouldUpdate) {
-        await install(latestVersion, terminal, updater);
-      } else {
-        terminal.say("Update cancelled.");
-      }
-    }
+    latestVersion = await updater.latestVersion();
   } catch (error) {
     terminal.error(`Error checking for updates: ${(error as Error).message}`);
+    return ExitCode.Success;
   }
+
+  if (latestVersion === version) {
+    terminal.say(`You are running the latest version: ${version}`);
+    return ExitCode.Success;
+  }
+
+  terminal.say(`Update available: ${version} -> ${latestVersion}`);
+
+  const shouldUpdate = autoUpdate || (await terminal.confirm(updatePromptText(version, latestVersion), true));
+  if (!shouldUpdate) {
+    terminal.say("Update cancelled.");
+    return ExitCode.Cancelled;
+  }
+
+  await install(latestVersion, terminal, updater);
+  return ExitCode.Success;
 }
 
 async function install(version: string, terminal: Terminal, updater: Updater): Promise<void> {
