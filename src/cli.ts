@@ -58,7 +58,7 @@ async function run(argv: string[], terminal: Terminal, updater: Updater): Promis
   return runConvert(options, terminal);
 }
 
-async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<number> {
+async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<ExitCode> {
   terminal.say(BANNER);
 
   const sourcePath = options.source || (await terminal.askSourcePath());
@@ -95,10 +95,10 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
 
   if (result.success) {
     terminal.say(conversionSuccessText(result));
-    return 0;
+    return ExitCode.Success;
   }
   terminal.error(conversionFailureText(result));
-  return 1;
+  return ExitCode.ConversionFailed;
 }
 
 async function runBatch(
