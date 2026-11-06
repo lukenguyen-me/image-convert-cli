@@ -1,10 +1,8 @@
 export * from "./types";
 export * from "./utils/path";
 export * from "./utils/format";
-export { convertImage, displayConversionResult, convertBatch, displayBatchResult } from "./converter";
-export { runCli, handleUpdate } from "./cli";
-export {
-  type IPromptService,
-  InteractivePromptService,
-  NoopPromptService,
-} from "./prompts";
+export { convertImage, convertBatch } from "./converter";
+export { main } from "./cli";
+export { type Terminal, type OutputStream, InteractiveTerminal } from "./terminal";
+export { ScriptedTerminal, type ScriptedAnswer } from "./scripted-terminal";
+export { type Updater, type InstallOutcome, type InstallOutput, NpmUpdater, InMemoryUpdater } from "./updater";

@@ -1,8 +1,7 @@
 import { expect, describe, it } from "bun:test";
-import { convertImage, convertBatch, displayBatchResult } from "../src/converter";
+import { convertImage, convertBatch } from "../src/converter";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { BatchConversionSummary } from "../src/types";
 
 describe("convertImage", () => {
   it("should return success false for non-existent file", async () => {
@@ -332,33 +331,6 @@ describe("convertBatch", () => {
     // Cleanup
     fs.rmSync(sourceDir, { recursive: true });
     fs.rmSync(destDir, { recursive: true });
-  });
-});
-
-describe("displayBatchResult", () => {
-  it("should display batch conversion results", () => {
-    let logOutput = "";
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logOutput += args.join(" ") + "\n";
-      originalLog(...args);
-    };
-
-    const summary: BatchConversionSummary = {
-      totalFiles: 2,
-      successCount: 1,
-      failureCount: 1,
-      skippedCount: 0,
-      results: [],
-      totalElapsed: 100,
-    };
-
-    displayBatchResult(summary);
-
-    console.log = originalLog;
-
-    expect(logOutput).toContain("Batch conversion complete");
-    expect(logOutput).toContain("Total files: 2");
   });
 });
 

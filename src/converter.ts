@@ -8,7 +8,6 @@ import type {
   BatchConversionSummary,
   BatchConversionResult,
 } from "./types";
-import { formatBytes } from "./utils/format";
 import {
   getImageFilesFromDirectory,
   isSameFormat,
@@ -106,21 +105,6 @@ export async function convertImage(
   }
 }
 
-export function displayConversionResult(result: ConversionResult): void {
-  if (result.success) {
-    console.log("\n✓ Conversion complete!");
-    console.log(`  Time: ${result.elapsed}ms`);
-    console.log(`  Original size: ${formatBytes(result.originalSize)}`);
-    console.log(`  Output size: ${formatBytes(result.outputSize)}`);
-    console.log(
-      `  Saved: ${(((result.originalSize - result.outputSize) / result.originalSize) * 100).toFixed(1)}%`,
-    );
-    console.log(`\nOutput saved to: ${result.destinationPath}`);
-  } else {
-    console.error("\n✗ Conversion failed:", result.error);
-  }
-}
-
 export async function convertBatch(
   settings: BatchConversionSettings,
 ): Promise<BatchConversionSummary> {
@@ -177,42 +161,4 @@ export async function convertBatch(
     results,
     totalElapsed: Date.now() - startTime,
   };
-}
-
-export function displayBatchResult(summary: BatchConversionSummary): void {
-  console.log("\nBatch conversion complete!");
-  console.log(`  Total files: ${summary.totalFiles}`);
-  console.log(`  Converted: ${summary.successCount}`);
-  console.log(`  Failed: ${summary.failureCount}`);
-  console.log(`  Skipped: ${summary.skippedCount}`);
-  console.log(`  Time: ${summary.totalElapsed}ms`);
-
-  if (summary.successCount > 0) {
-    let totalOriginal = 0;
-    let totalOutput = 0;
-
-    for (const result of summary.results) {
-      if (result.success) {
-        totalOriginal += result.originalSize;
-        totalOutput += result.outputSize;
-      }
-    }
-
-    if (totalOriginal > 0) {
-      console.log(
-        `  Saved: ${(((totalOriginal - totalOutput) / totalOriginal) * 100).toFixed(1)}%`,
-      );
-    }
-  }
-
-  console.log(`\nOutput directory: ${summary.results[0]?.destinationPath ? require("node:path").dirname(summary.results[0].destinationPath) : "N/A"}`);
-
-  if (summary.failureCount > 0) {
-    console.log("\nFailed files:");
-    for (const result of summary.results) {
-      if (!result.success) {
-        console.log(`  - ${result.sourcePath}: ${result.error}`);
-      }
-    }
-  }
 }
