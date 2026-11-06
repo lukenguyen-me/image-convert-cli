@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-06
+
 ### Added
 - GIF, TIFF (`.tif`/`.tiff`) and AVIF are accepted as sources, in single-file runs and Batches.
 - HEIC (`.heic`/`.heif`, such as iPhone photos) is accepted as a source, in single-file runs and Batches. Display P3 colour is converted to sRGB, as for any other source.

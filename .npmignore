@@ -11,9 +11,13 @@ tests/
 tsconfig.json
 CLAUDE.md
 AGENTS.md
+.agents/
+skills-lock.json
 
 # docs
 README.md
+GLOSSARY.md
+docs/
 example/
 assets/
 
