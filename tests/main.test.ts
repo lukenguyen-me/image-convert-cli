@@ -81,7 +81,7 @@ describe("main", () => {
     // argv → a fragment the error must contain, naming the problem.
     const cases: [argv: string[], names: string][] = [
       [["-s", "photo.png", "--format", "gif"], "--format 'gif'"],
-      [["-s", "photo.png", "-f", "WEBP"], "--format 'WEBP'"],
+      [["-s", "photo.png", "-f", "GIF"], "--format 'GIF'"],
       [["--fromat", "webp"], "'--fromat'"],
       [["-x"], "'-x'"],
       [["--source"], "--source needs a value"],
@@ -95,6 +95,14 @@ describe("main", () => {
       [["-y"], "--source is required with -y"],
       [["convert", "-s", "photo.png"], "'convert'"],
       [["update", "--fromat"], "'--fromat'"],
+      [["update", "--source", "x.png", "--format", "webp", "-c"], "--source does not apply to 'imgc update'"],
+      [["update", "-c"], "--compress does not apply to 'imgc update'"],
+      [["update", "-d", "out"], "--dest does not apply to 'imgc update'"],
+      [["update", "--overwrite"], "--overwrite does not apply to 'imgc update'"],
+      [["version", "-c", "--overwrite"], "--compress does not apply to 'imgc version'"],
+      [["version", "-y"], "--yes does not apply to 'imgc version'"],
+      [["--version", "-s", "x.png"], "--source does not apply to 'imgc version'"],
+      [["-v", "-f", "webp"], "--format does not apply to 'imgc version'"],
     ];
 
     for (const [argv, names] of cases) {
@@ -178,18 +186,18 @@ describe("main", () => {
       });
     }
 
-    it("reports a failed version lookup and still exits 0", async () => {
+    it("reports a failed version lookup and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({ latest: new Error("Network error") });
 
       const code = await main(["update"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Error checking for updates: Network error\n");
       expect(updater.installed).toEqual([]);
     });
 
-    it("reports an installer that exits non-zero and still exits 0", async () => {
+    it("reports an installer that exits non-zero and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({
         latest: "999.0.0",
@@ -198,12 +206,12 @@ describe("main", () => {
 
       const code = await main(["update", "-y"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Update failed with exit code: 1\n");
       expect(terminal.stdout).not.toContain("Update completed successfully.");
     });
 
-    it("reports an installer that could not start and still exits 0", async () => {
+    it("reports an installer that could not start and exits 1", async () => {
       const terminal = new ScriptedTerminal();
       const updater = new InMemoryUpdater({
         latest: "999.0.0",
@@ -212,7 +220,7 @@ describe("main", () => {
 
       const code = await main(["update", "-y"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(terminal.stderr).toBe("Update failed: spawn bun ENOENT\n");
     });
   });
@@ -247,7 +255,7 @@ describe("main", () => {
         "Image Converter - Convert JPEG, PNG, WebP, GIF, TIFF, AVIF or SVG images to WebP, JPEG, PNG or ICO\n\n" +
           "\nConversion settings:\n" +
           `  Source: ${source}\n` +
-          "  Target format: WEBP\n" +
+          "  Output format: WEBP\n" +
           `  Destination: ${destination}\n` +
           // -y only skips prompts; it never turns on Compress.
           "  Compression: No\n",
@@ -278,7 +286,7 @@ describe("main", () => {
       expect(code).toBe(0);
       expect(terminal.asked).toEqual([
         "Source file path",
-        "Target format",
+        "Output format",
         `Destination path (${path.join(dir, "photo.jpeg")})`,
         "Do you want to compress the image?",
         "Proceed with conversion?",
@@ -298,6 +306,24 @@ describe("main", () => {
       expect(fs.existsSync(destination)).toBe(false);
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
     });
+
+    const anyCase: [typed: string, extension: string, written: keyof sharp.FormatEnum][] = [
+      ["JPG", "jpg", "jpeg"],
+      ["WebP", "webp", "webp"],
+      ["JPEG", "jpeg", "jpeg"],
+    ];
+    for (const [typed, extension, written] of anyCase) {
+      it(`--format ${typed} is accepted in any case and writes a .${extension} file`, async () => {
+        const source = path.join(dir, "photo.png");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", source, "-f", typed], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readdirSync(dir).sort()).toEqual(["photo.png", `photo.${extension}`].sort());
+        expect((await sharp(path.join(dir, `photo.${extension}`)).metadata()).format).toBe(written);
+      });
+    }
 
     for (const spelling of ["jpeg", "jpg"]) {
       it(`--format ${spelling} offers a .${spelling} destination and writes it`, async () => {
@@ -335,7 +361,7 @@ describe("main", () => {
       expect(code).toBe(130);
       expect(terminal.asked).toEqual([
         "Source file path",
-        "Target format",
+        "Output format",
         `Destination path (${path.join(dir, "photo.webp")})`,
       ]);
       expect(fs.readdirSync(dir)).toEqual(["photo.png"]);
@@ -552,8 +578,8 @@ describe("main", () => {
         await writeGradientPng(path.join(dir, "in", name));
       }
       // Reference outputs, made by the Output Format module's own WebP recipe.
-      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "compressed.webp"), "webp", { compress: true });
-      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "plain.webp"), "webp", { compress: false });
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "compressed.webp"), { format: "webp", compress: true });
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "plain.webp"), { format: "webp", compress: false });
       compressed = fs.readFileSync(path.join(dir, "ref", "compressed.webp"));
       plain = fs.readFileSync(path.join(dir, "ref", "plain.webp"));
       expect(compressed.equals(plain)).toBe(false);
@@ -627,7 +653,7 @@ describe("main", () => {
     /** Write a small real image in the format its extension names. */
     async function writeImage(name: string): Promise<string> {
       const filePath = path.join(dir, name);
-      const format = path.extname(name).slice(1).replace("jpg", "jpeg") as keyof sharp.FormatEnum;
+      const format = path.extname(name).slice(1).toLowerCase().replace("jpg", "jpeg") as keyof sharp.FormatEnum;
       await sharp({ create: { width: 4, height: 4, channels: 3, background: "#36c" } })
         .toFormat(format)
         .toFile(filePath);
@@ -843,6 +869,93 @@ describe("main", () => {
       expect(fs.readFileSync(source)).toEqual(before);
       expect(await formatOf(path.join(dir, "photo.converted.png"))).toBe("png");
       expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "photo.converted.png")}\n`);
+    });
+
+    for (const flags of [["-y"], ["-y", "--overwrite"]]) {
+      it(`a single-file --dest that is an existing directory is refused with exit 2 (${flags.join(" ")})`, async () => {
+        const source = await writeImage("photo.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main([...flags, "-s", source, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination ${out} is a directory; give an output file path`);
+        expect(terminal.stderr).toEndWith("Run 'imgc --help' for usage.\n");
+        expect(fs.readdirSync(out)).toEqual([]);
+      });
+    }
+
+    it("an interactive single-file run whose destination is a directory is refused with exit 2", async () => {
+      const source = await writeImage("photo.png");
+      const out = path.join(dir, "out");
+      fs.mkdirSync(out);
+      const terminal = new ScriptedTerminal([out, false]);
+
+      const code = await main(["-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(2);
+      expect(terminal.stderr).toContain(`the destination ${out} is a directory`);
+      expect(terminal.asked).toEqual([`Destination path (${path.join(dir, "photo.webp")})`, "Do you want to compress the image?"]);
+      expect(fs.readdirSync(out)).toEqual([]);
+    });
+
+    describe("paths that differ only in case name the same file", () => {
+      for (const flags of [[], ["--overwrite"]]) {
+        it(`a same-format source with an upper-case extension writes <name>.converted.<ext> (${flags.join(" ") || "no flags"})`, async () => {
+          const source = await writeImage("single.PNG");
+          const before = fs.readFileSync(source);
+          const terminal = new ScriptedTerminal();
+
+          const code = await main(["-y", ...flags, "-s", source, "-f", "png", "-c"], terminal, new InMemoryUpdater());
+
+          expect(code).toBe(0);
+          expect(fs.readFileSync(source)).toEqual(before);
+          expect(fs.readdirSync(dir).sort()).toEqual(["single.PNG", "single.converted.png"]);
+          expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "single.converted.png")}\n`);
+        });
+      }
+
+      it("--dest differing from the source only in case is refused with exit 2", async () => {
+        const source = await writeImage("photo.png");
+        const before = fs.readFileSync(source);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(
+          ["-y", "--overwrite", "-s", source, "-f", "png", "-d", path.join(dir, "PHOTO.PNG")],
+          terminal,
+          new InMemoryUpdater(),
+        );
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination is the source file ${source}`);
+        expect(fs.readFileSync(source)).toEqual(before);
+      });
+
+      it("a Batch treats output names that differ only in case as a collision", async () => {
+        await writeImage("Photo.png");
+        await writeImage("photo.jpg");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readdirSync(dir).sort()).toEqual(["Photo.png", "Photo.png.webp", "photo.jpg", "photo.jpg.webp"]);
+        expect(terminal.stdout).toContain("  Converted: 2\n  Failed: 0\n  Skipped: 0\n");
+      });
+
+      it("a Batch never writes over a source whose name differs only in case", async () => {
+        await writeImage("photo.png");
+        const already = await writeImage("PHOTO.WEBP");
+        const before = fs.readFileSync(already);
+
+        const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp"], new ScriptedTerminal(), new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(already)).toEqual(before);
+        expect(fs.readdirSync(dir).sort()).toEqual(["PHOTO.WEBP", "photo.png", "photo.png.webp"]);
+      });
     });
 
     it("an interactive same-format run offers <name>.converted.<ext> as the destination", async () => {

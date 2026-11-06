@@ -7,8 +7,8 @@ describe("conversionSuccessText", () => {
   it("shows the share of bytes saved", () => {
     const text = conversionSuccessText({
       success: true,
-      sourcePath: "photo.png",
-      destinationPath: "photo.webp",
+      source: "photo.png",
+      output: "photo.webp",
       originalSize: 2000,
       outputSize: 500,
       elapsed: 12,
@@ -20,8 +20,8 @@ describe("conversionSuccessText", () => {
   it("leaves out \"Saved\" when the original is zero bytes, rather than showing NaN", () => {
     const text = conversionSuccessText({
       success: true,
-      sourcePath: "empty.svg",
-      destinationPath: "empty.png",
+      source: "empty.svg",
+      output: "empty.png",
       originalSize: 0,
       outputSize: 120,
       elapsed: 3,

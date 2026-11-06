@@ -16,6 +16,9 @@ export type Conversion = {
   outputExists?: boolean;
 };
 
+/** A Conversion that won't run, and why. */
+export type SkippedConversion = Conversion & { skip: SkipReason };
+
 /** Every Conversion in one run, worked out before any file is written. See GLOSSARY.md. */
 export type ConversionPlan = {
   /** Whether the source is a directory. */
@@ -27,7 +30,7 @@ export type ConversionPlan = {
 
 /** Work out the Conversion Plan for complete settings. Writes nothing. */
 export function planConversions(settings: ConvertSettings): ConversionPlan {
-  const plan = settings.sourceIsDirectory ? planBatch(settings) : planSingle(settings);
+  const plan = isBatchSource(settings.source) ? planBatch(settings) : planSingle(settings);
   for (const conversion of plan.conversions) {
     if (!conversion.skip && fs.existsSync(conversion.output)) {
       conversion.outputExists = true;
@@ -36,9 +39,24 @@ export function planConversions(settings: ConvertSettings): ConversionPlan {
   return plan;
 }
 
+/** Whether a source makes the run a Batch: it is a directory. */
+export function isBatchSource(source: string): boolean {
+  return isDirectory(source);
+}
+
+/** The Conversions that will run. */
+export function runnableConversions(plan: ConversionPlan): Conversion[] {
+  return plan.conversions.filter((conversion) => !conversion.skip);
+}
+
+/** The Conversions that won't run, each with its reason. */
+export function skippedConversions(plan: ConversionPlan): SkippedConversion[] {
+  return plan.conversions.filter((conversion): conversion is SkippedConversion => conversion.skip !== undefined);
+}
+
 /** The Conversions that will run but would replace an existing file. */
 export function existingOutputs(plan: ConversionPlan): Conversion[] {
-  return plan.conversions.filter((conversion) => !conversion.skip && conversion.outputExists);
+  return runnableConversions(plan).filter((conversion) => conversion.outputExists);
 }
 
 /** Skip every Conversion that would replace an existing file. */
@@ -65,6 +83,9 @@ function planSingle(settings: ConvertSettings): ConversionPlan {
   if (isSamePath(destination, source)) {
     throw new UsageError(`the destination is the source file ${source}; choose another output path`);
   }
+  if (isDirectory(destination)) {
+    throw new UsageError(`the destination ${destination} is a directory; give an output file path`);
+  }
   return { batch: false, outputDirectory: path.dirname(destination), conversions: [{ source, output: destination }] };
 }
 
@@ -80,12 +101,12 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
   // Sources that would share an output name keep their source extension: photo.png → photo.png.webp.
   // So does a source whose output would land on another source, such as a skipped photo.webp.
   const runnable = conversions.filter((conversion) => !conversion.skip);
-  const counts = new Map<string, number>(sources.map((source) => [path.resolve(source), 1]));
+  const counts = new Map<string, number>(sources.map((source) => [pathKey(source), 1]));
   for (const { output } of runnable) {
-    counts.set(path.resolve(output), (counts.get(path.resolve(output)) ?? 0) + 1);
+    counts.set(pathKey(output), (counts.get(pathKey(output)) ?? 0) + 1);
   }
   for (const conversion of runnable) {
-    if (counts.get(path.resolve(conversion.output))! > 1) {
+    if (counts.get(pathKey(conversion.output))! > 1) {
       conversion.output = outputPath(destination, path.basename(conversion.source), format);
     }
   }
@@ -93,8 +114,21 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
   return { batch: true, outputDirectory: destination, conversions };
 }
 
+function isDirectory(filePath: string): boolean {
+  return fs.statSync(filePath, { throwIfNoEntry: false })?.isDirectory() ?? false;
+}
+
 function isSamePath(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b);
+  return pathKey(a) === pathKey(b);
+}
+
+/**
+ * What identifies a file for the source guard and collision checks. Case is ignored,
+ * because the default macOS and Windows filesystems treat `Photo.png` and `photo.png`
+ * as one file. On a case-sensitive filesystem this only errs on the safe side.
+ */
+function pathKey(filePath: string): string {
+  return path.resolve(filePath).toLowerCase();
 }
 
 function outputPath(directory: string, stem: string, format: FormatSpelling): string {

@@ -1,4 +1,4 @@
-import { expect, describe, it, beforeAll, afterAll } from "bun:test";
+import { expect, describe, it, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -9,19 +9,22 @@ import {
   findInputFormat,
   findOutputFormat,
   FORMAT_SPELLINGS,
+  type FormatSpelling,
   formatPromptChoices,
   INPUT_FORMATS,
+  isFormatSpelling,
   isSameFormat,
   OUTPUT_FORMATS,
 } from "../src/formats";
 
+// A fresh temp directory per test, removed even when an assertion fails.
 let dir: string;
 
-beforeAll(() => {
+beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-formats-"));
 });
 
-afterAll(() => {
+afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -52,7 +55,13 @@ async function decodedFormat(file: string): Promise<string | undefined> {
 }
 
 /** One row per Output Format. Adding an Output Format means adding a row here. */
-const OUTPUT_FORMAT_TABLE = [
+const OUTPUT_FORMAT_TABLE: {
+  name: FormatSpelling;
+  label: string;
+  aliases: FormatSpelling[];
+  sameAs: string[];
+  differentFrom: string[];
+}[] = [
   { name: "webp", label: "WebP", aliases: [], sameAs: ["a.webp", "A.WEBP"], differentFrom: ["a.png", "a.jpg"] },
   { name: "jpeg", label: "JPEG", aliases: ["jpg"], sameAs: ["a.jpeg", "a.jpg", "a.JPG"], differentFrom: ["a.png", "a.webp"] },
   { name: "png", label: "PNG", aliases: [], sameAs: ["a.png"], differentFrom: ["a.jpg", "a.ico"] },
@@ -73,9 +82,9 @@ describe("Output Formats", () => {
         expect(format?.aliases).toEqual(row.aliases);
       });
 
-      it("is found by each alias, in any case", () => {
-        for (const spelling of [...row.aliases, row.name.toUpperCase()]) {
-          expect(findOutputFormat(spelling)?.name).toBe(row.name);
+      it("is found by each alias", () => {
+        for (const spelling of row.aliases) {
+          expect(findOutputFormat(spelling).name).toBe(row.name);
         }
       });
 
@@ -91,7 +100,7 @@ describe("Output Formats", () => {
           const source = await makeImage(`source-${row.name}-${compress}.png`);
           const destination = path.join(dir, `out-${row.name}-${compress}.${row.name}`);
 
-          await encode(source, destination, row.name, { compress });
+          await encode(source, destination, { format: row.name, compress });
 
           expect(await decodedFormat(destination)).toBe(row.name);
         });
@@ -103,8 +112,8 @@ describe("Output Formats", () => {
           const byName = path.join(dir, `by-name.${row.name}`);
           const byAlias = path.join(dir, `by-alias.${alias}`);
 
-          await encode(source, byName, row.name, { compress: false });
-          await encode(source, byAlias, alias, { compress: false });
+          await encode(source, byName, { format: row.name, compress: false });
+          await encode(source, byAlias, { format: alias, compress: false });
 
           expect(fs.readFileSync(byAlias).equals(fs.readFileSync(byName))).toBe(true);
         });
@@ -112,9 +121,9 @@ describe("Output Formats", () => {
     });
   }
 
-  it("does not find an unknown spelling", () => {
-    expect(findOutputFormat("bmp")).toBeUndefined();
-    expect(findOutputFormat("svg")).toBeUndefined();
+  it("does not accept an unknown spelling", () => {
+    expect(isFormatSpelling("bmp")).toBe(false);
+    expect(isFormatSpelling("svg")).toBe(false);
   });
 });
 
@@ -130,7 +139,7 @@ async function decodedSizes(file: string): Promise<number[][]> {
 
 describe("sizes", () => {
   /** What a 1000x500 SVG becomes in each Output Format: rasterised to fit 512x512 (ICO then embeds its own sizes). */
-  const SVG_SIZES: Record<string, number[][]> = {
+  const SVG_SIZES: Partial<Record<FormatSpelling, number[][]>> = {
     webp: [[512, 256]],
     jpeg: [[512, 256]],
     png: [[512, 256]],
@@ -141,12 +150,12 @@ describe("sizes", () => {
     expect(Object.keys(SVG_SIZES)).toEqual(OUTPUT_FORMATS.map((format) => format.name));
   });
 
-  for (const [name, sizes] of Object.entries(SVG_SIZES)) {
+  for (const [name, sizes] of Object.entries(SVG_SIZES) as [FormatSpelling, number[][]][]) {
     it(`rasterises SVG input to fit 512x512 when writing ${name}`, async () => {
       const source = writeSvg(`wide-${name}.svg`, 1000, 500);
       const destination = path.join(dir, `from-svg.${name}`);
 
-      await encode(source, destination, name, { compress: false });
+      await encode(source, destination, { format: name, compress: false });
 
       expect(await decodedSizes(destination)).toEqual(sizes);
     });
@@ -156,7 +165,7 @@ describe("sizes", () => {
     const source = await makeImage("raster-size.png", 1000, 500);
     const destination = path.join(dir, "raster-size.webp");
 
-    await encode(source, destination, "webp", { compress: false });
+    await encode(source, destination, { format: "webp", compress: false });
 
     expect(await decodedSizes(destination)).toEqual([[1000, 500]]);
   });
@@ -165,7 +174,7 @@ describe("sizes", () => {
     const source = await makeImage("square.png", 100, 100);
     const destination = path.join(dir, "square.ico");
 
-    await encode(source, destination, "ico", { compress: false });
+    await encode(source, destination, { format: "ico", compress: false });
 
     expect(await decodedSizes(destination)).toEqual([[32, 32], [16, 16]]);
   });
@@ -197,7 +206,7 @@ describe("Input Formats", () => {
         expect(findInputFormat(source)?.label).toBe(row.label);
         expect(findInputFormat(source.toUpperCase())?.label).toBe(row.label);
 
-        await encode(source, destination, "png", { compress: false });
+        await encode(source, destination, { format: "png", compress: false });
         expect(await decodedFormat(destination)).toBe("png");
       });
     }
@@ -213,7 +222,7 @@ describe("Input Formats", () => {
     const source = path.join(dir, "photo.bmp");
     fs.copyFileSync(await makeImage("real.png"), source);
 
-    await expect(encode(source, path.join(dir, "photo.webp"), "webp", { compress: false })).rejects.toThrow(
+    await expect(encode(source, path.join(dir, "photo.webp"), { format: "webp", compress: false })).rejects.toThrow(
       "Unsupported input format",
     );
   });

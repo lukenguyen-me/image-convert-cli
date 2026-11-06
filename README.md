@@ -101,9 +101,11 @@ imgc -y -s photo.png -f webp
 
 ### Output names
 
-- The spelling you pass to `--format` picks the extension: `-f jpg` writes `photo.jpg`, `-f jpeg` writes `photo.jpeg`. The interactive JPEG choice writes `.jpg`.
+- The spelling you pass to `--format` picks the extension: `-f jpg` writes `photo.jpg`, `-f jpeg` writes `photo.jpeg`. Any case works, and the extension is lower case: `-f JPG` writes `photo.jpg`. The interactive JPEG choice writes `.jpg`.
 - Converting a file to its own format writes `<name>.converted.<ext>` (for example `photo.converted.png`). The tool never writes over the source; a `--dest` equal to the source is an error.
+- For a single file, `--dest` names the output file; an existing directory there is an error.
 - In a Batch (a directory source), files already in the Output Format are skipped. Sources whose output names would collide keep their extension: `photo.png` and `photo.jpg` become `photo.png.webp` and `photo.jpg.webp`. A Batch output never lands on another source, even with `--overwrite`.
+- Names that differ only in case count as the same file, so `photo.PNG` to png writes `photo.converted.png`.
 
 ### Existing output files
 
@@ -116,7 +118,7 @@ imgc -y -s photo.png -f webp
 | Code | Meaning |
 |------|---------|
 | 0 | Success (including runs where files were skipped) |
-| 1 | A Conversion failed, or any file in a Batch failed |
+| 1 | A Conversion failed, any file in a Batch failed, or `imgc update` couldn't look up or install the latest version |
 | 2 | Usage error: a bad or unknown flag or value, a missing required flag with `-y`, or an unsupported source |
 | 130 | Cancelled: you declined a confirmation or pressed Ctrl-C |
 

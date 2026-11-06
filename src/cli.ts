@@ -4,7 +4,14 @@ import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertImage } from "./converter";
-import { type ConversionPlan, existingOutputs, planConversions, skipExistingOutputs } from "./plan";
+import {
+  type ConversionPlan,
+  existingOutputs,
+  planConversions,
+  runnableConversions,
+  skipExistingOutputs,
+  skippedConversions,
+} from "./plan";
 import { HELP_TEXT, UsageError, parseCommand } from "./command";
 import { type ConvertSettings, fillIn } from "./settings";
 import {
@@ -63,9 +70,8 @@ async function run(argv: string[], terminal: Terminal, updater: Updater): Promis
 async function runConvert(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
   const startTime = Date.now();
   const plan = planConversions(settings);
-  if (!plan.batch) {
-    terminal.say(settingsText(settings));
-  }
+  const style = plan.batch ? BATCH : SINGLE_FILE;
+  style.intro(settings, terminal);
 
   // Existing outputs: --overwrite replaces them; otherwise ask once, or skip them in an Unattended Run.
   const existing = existingOutputs(plan);
@@ -74,7 +80,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
       ? "skip"
       : await terminal.askExistingOutputs(existing.map((conversion) => conversion.output));
     if (choice === "cancel") {
-      terminal.say(cancelledText(plan));
+      terminal.say(style.cancelledText);
       return ExitCode.Cancelled;
     }
     if (choice === "skip") {
@@ -82,22 +88,19 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     }
   }
 
-  const toRun = plan.conversions.filter((conversion) => !conversion.skip);
+  const toRun = runnableConversions(plan);
 
   if (!settings.unattended && toRun.length > 0) {
-    const question = plan.batch ? `Convert ${toRun.length} files?` : "Proceed with conversion?";
-    if (!(await terminal.confirm(question, true))) {
-      terminal.say(cancelledText(plan));
+    if (!(await terminal.confirm(style.confirmQuestion(toRun.length), true))) {
+      terminal.say(style.cancelledText);
       return ExitCode.Cancelled;
     }
   }
 
-  if (plan.batch) {
-    fs.mkdirSync(plan.outputDirectory, { recursive: true });
-  }
+  style.prepare(plan);
   const results: ConversionResult[] = [];
   for (const conversion of toRun) {
-    results.push(await convertImage(conversion.source, conversion.output, settings.format, settings.compress));
+    results.push(await convertImage(conversion, settings));
   }
 
   const summary: RunSummary = {
@@ -105,35 +108,53 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     outputDirectory: plan.outputDirectory,
     totalFiles: plan.conversions.length,
     results,
-    skipped: plan.conversions.filter((conversion) => conversion.skip),
+    skipped: skippedConversions(plan),
     totalElapsed: Date.now() - startTime,
   };
-  report(summary, plan.batch, terminal);
-  return results.some((result) => !result.success) ? ExitCode.ConversionFailed : ExitCode.Success;
+  style.report(summary, terminal);
+  return results.some((result) => !result.success) ? ExitCode.Failed : ExitCode.Success;
 }
 
-function cancelledText(plan: ConversionPlan): string {
-  return plan.batch ? "Batch conversion cancelled." : "Conversion cancelled.";
+/** What differs between a single-file run and a Batch. Each run picks one, once. */
+interface RunStyle {
+  /** Say what is about to happen, once the plan is made. */
+  intro(settings: ConvertSettings, terminal: Terminal): void;
+  /** The confirmation asked before `count` Conversions run. */
+  confirmQuestion(count: number): string;
+  cancelledText: string;
+  /** Make sure the outputs have somewhere to go. */
+  prepare(plan: ConversionPlan): void;
+  report(summary: RunSummary, terminal: Terminal): void;
 }
 
-function report(summary: RunSummary, batch: boolean, terminal: Terminal): void {
-  if (batch) {
-    terminal.say(batchResultText(summary));
-    return;
-  }
-  for (const result of summary.results) {
-    if (result.success) {
-      terminal.say(conversionSuccessText(result));
-    } else {
-      terminal.error(conversionFailureText(result));
+const SINGLE_FILE: RunStyle = {
+  intro: (settings, terminal) => terminal.say(settingsText(settings)),
+  confirmQuestion: () => "Proceed with conversion?",
+  cancelledText: "Conversion cancelled.",
+  prepare: () => {},
+  report(summary, terminal) {
+    for (const result of summary.results) {
+      if (result.success) {
+        terminal.say(conversionSuccessText(result));
+      } else {
+        terminal.error(conversionFailureText(result));
+      }
     }
-  }
-  for (const conversion of summary.skipped) {
-    terminal.say(conversionSkippedText(conversion, summary.format));
-  }
-}
+    for (const conversion of summary.skipped) {
+      terminal.say(conversionSkippedText(conversion, summary.format));
+    }
+  },
+};
 
-async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
+const BATCH: RunStyle = {
+  intro: () => {},
+  confirmQuestion: (count) => `Convert ${count} files?`,
+  cancelledText: "Batch conversion cancelled.",
+  prepare: (plan) => fs.mkdirSync(plan.outputDirectory, { recursive: true }),
+  report: (summary, terminal) => terminal.say(batchResultText(summary)),
+};
+
+async function runUpdate(autoInstall: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   const version = currentVersion();
 
   let latestVersion: string;
@@ -141,7 +162,7 @@ async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updat
     latestVersion = await updater.latestVersion();
   } catch (error) {
     terminal.error(`Error checking for updates: ${(error as Error).message}`);
-    return ExitCode.Success;
+    return ExitCode.Failed;
   }
 
   if (latestVersion === version) {
@@ -151,26 +172,28 @@ async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updat
 
   terminal.say(`Update available: ${version} -> ${latestVersion}`);
 
-  const shouldUpdate = autoUpdate || (await terminal.confirm(updatePromptText(version, latestVersion), true));
+  const shouldUpdate = autoInstall || (await terminal.confirm(updatePromptText(version, latestVersion), true));
   if (!shouldUpdate) {
     terminal.say("Update cancelled.");
     return ExitCode.Cancelled;
   }
 
-  await install(latestVersion, terminal, updater);
-  return ExitCode.Success;
+  return install(latestVersion, terminal, updater);
 }
 
-async function install(version: string, terminal: Terminal, updater: Updater): Promise<void> {
+async function install(version: string, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   terminal.say("Updating image-convert-cli...");
   const outcome = await updater.install(version, (chunk, stream) => terminal.relay(chunk, stream));
   if (outcome.status === "installed") {
     terminal.say("Update completed successfully.");
-  } else if (outcome.status === "exited") {
+    return ExitCode.Success;
+  }
+  if (outcome.status === "exited") {
     terminal.error(`Update failed with exit code: ${outcome.exitCode}`);
   } else {
     terminal.error(`Update failed: ${outcome.message}`);
   }
+  return ExitCode.Failed;
 }
 
 function currentVersion(): string {

@@ -89,19 +89,21 @@ describe("filePathCompleter", () => {
     }
   });
 
-  it("should expand tilde to home directory", () => {
-    const originalCwd = process.cwd();
-    process.chdir(tempDir);
+  it("should expand tilde to the home directory, honouring $HOME", () => {
+    const originalHome = process.env.HOME;
+    const home = path.join(tempDir, "home");
+    fs.mkdirSync(home);
+    fs.writeFileSync(path.join(home, "photo.png"), "content");
+    fs.mkdirSync(path.join(home, "pictures"));
+    process.env.HOME = home;
 
     try {
       const result = filePathCompleter("~/");
 
-      // Should expand ~ to actual home directory and list files
       expect(result[1]).toBe("~/");
-      // The completions should contain actual files from home directory
-      expect(result[0].length).toBeGreaterThan(0);
+      expect([...result[0]].sort()).toEqual([path.join(home, "photo.png"), `${path.join(home, "pictures")}/`]);
     } finally {
-      process.chdir(originalCwd);
+      process.env.HOME = originalHome;
     }
   });
 });

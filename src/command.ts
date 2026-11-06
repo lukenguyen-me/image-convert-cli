@@ -67,15 +67,16 @@ const FLAGS = {
     type: "boolean",
     help: ["Replace output files that already exist (default: ask, or skip them with -y)"],
   },
-} as const satisfies Record<
-  string,
-  { type: "string" | "boolean"; short?: string; value?: string; help: readonly string[] }
->;
+} as const satisfies Record<string, FlagSpec>;
 
+type FlagSpec = { type: "string" | "boolean"; short?: string; value?: string; help: readonly string[] };
 type FlagName = keyof typeof FLAGS;
 
+/** Every flag's spec, with each optional field readable whichever flag it is. */
+const FLAG_SPECS: Record<FlagName, FlagSpec> = FLAGS;
+
 function flagUsage(name: FlagName): string {
-  const flag = FLAGS[name] as { short?: string; value?: string };
+  const flag = FLAG_SPECS[name];
   return `--${name}${flag.short ? `, -${flag.short}` : ""}${flag.value ? ` <${flag.value}>` : ""}`;
 }
 
@@ -134,13 +135,17 @@ export function parseCommand(argv: string[]): Command {
     return { kind: "help" };
   }
   if (values.version || command === "version") {
+    rejectFlagsOtherThan(values, "version", ["version"]);
     return { kind: "version" };
   }
   if (command === "update") {
+    rejectFlagsOtherThan(values, "update", ["yes"]);
     return { kind: "update", autoInstall: values.yes === true };
   }
 
-  if (values.format !== undefined && !isFormatSpelling(values.format)) {
+  // Any case is accepted; the lower-cased spelling is the output extension.
+  const format = values.format?.toLowerCase();
+  if (format !== undefined && !isFormatSpelling(format)) {
     throw new UsageError(`--format '${values.format}' is not an Output Format; use one of ${FORMAT_SPELLINGS.join(", ")}`);
   }
 
@@ -148,13 +153,25 @@ export function parseCommand(argv: string[]): Command {
     kind: "convert",
     request: {
       source: values.source,
-      format: values.format,
+      format,
       destination: values.dest,
       compress: values.compress ? true : undefined,
       unattended: values.yes === true,
       overwrite: values.overwrite === true,
     },
   };
+}
+
+/** A command other than convert takes only its own flags; a conversion flag there is a mistake, not a no-op. */
+function rejectFlagsOtherThan(
+  values: Partial<Record<FlagName, unknown>>,
+  command: "version" | "update",
+  allowed: readonly FlagName[],
+): void {
+  const stray = (Object.keys(FLAGS) as FlagName[]).find((name) => values[name] !== undefined && !allowed.includes(name));
+  if (stray !== undefined) {
+    throw new UsageError(`--${stray} does not apply to 'imgc ${command}'`);
+  }
 }
 
 function parseStrict(argv: string[]) {
@@ -174,7 +191,7 @@ function toUsageError(error: Error & { code?: string }): Error {
   if (error.code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
     const quoted = error.message.match(/'([^']+)'/)?.[1] ?? "";
     const name = (Object.keys(FLAGS) as FlagName[]).find((flag) => {
-      const short: string | undefined = (FLAGS[flag] as { short?: string }).short;
+      const short = FLAG_SPECS[flag].short;
       return quoted.split(/[\s,]+/).some((token) => token === `--${flag}` || (short && token === `-${short}`));
     });
     return new UsageError(name ? `--${name} needs a value` : error.message);

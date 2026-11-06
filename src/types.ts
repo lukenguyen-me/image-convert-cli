@@ -1,13 +1,11 @@
 import type { FormatSpelling } from "./formats";
-import type { Conversion } from "./plan";
-
-export type { FormatSpelling } from "./formats";
+import type { SkippedConversion } from "./plan";
 
 /** The outcome of one Conversion that ran, in a single-file run or a Batch. */
 export type ConversionResult = {
   success: boolean;
-  sourcePath: string;
-  destinationPath: string;
+  source: string;
+  output: string;
   originalSize: number;
   outputSize: number;
   elapsed: number;
@@ -21,6 +19,6 @@ export type RunSummary = {
   /** Every Conversion in the plan, run or skipped. */
   totalFiles: number;
   results: ConversionResult[];
-  skipped: Conversion[];
+  skipped: SkippedConversion[];
   totalElapsed: number;
 };

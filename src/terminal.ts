@@ -1,6 +1,5 @@
 import * as readline from "node:readline";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
 import { type FormatSpelling, formatPromptChoices } from "./formats";
@@ -49,15 +48,7 @@ export function filePathCompleter(line: string): readline.CompleterResult {
   const input = trimmed.split(" ")[0] || ".";
 
   const isDirectoryInput = input.endsWith("/");
-  let dir = isDirectoryInput
-    ? input.slice(0, -1) || "."
-    : path.dirname(input) || ".";
-
-  // Expand tilde to home directory
-  if (dir === "~" || dir.startsWith("~/")) {
-    const homeDir = os.homedir();
-    dir = dir === "~" ? homeDir : homeDir + dir.slice(1);
-  }
+  const dir = expandHome(isDirectoryInput ? input.slice(0, -1) || "." : path.dirname(input) || ".");
 
   const base = isDirectoryInput ? "" : path.basename(input) || "";
 
@@ -144,7 +135,7 @@ export class InteractiveTerminal implements Terminal {
 
   async askFormat(): Promise<FormatSpelling> {
     return cancellable(select<FormatSpelling>({
-      message: "Target format:",
+      message: "Output format:",
       choices: formatPromptChoices().map((choice) => ({
         value: choice.spelling,
         name: choice.label,

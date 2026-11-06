@@ -1,5 +1,5 @@
 import type { ConversionResult, RunSummary } from "./types";
-import type { Conversion } from "./plan";
+import type { SkippedConversion } from "./plan";
 import type { ConvertSettings } from "./settings";
 import { formatBytes } from "./utils/format";
 import { type FormatSpelling, INPUT_FORMATS, OUTPUT_FORMATS, findOutputFormat } from "./formats";
@@ -44,10 +44,15 @@ export function settingsText(settings: ConvertSettings): string {
   return [
     "\nConversion settings:",
     `  Source: ${settings.source}`,
-    `  Target format: ${settings.format.toUpperCase()}`,
+    `  Output format: ${settings.format.toUpperCase()}`,
     `  Destination: ${settings.destination}`,
     `  Compression: ${settings.compress ? "Yes" : "No"}`,
   ].join("\n");
+}
+
+/** The "Saved: N%" line, or no line when the original is zero bytes, since a share of nothing is meaningless. */
+function savedLine(originalSize: number, outputSize: number): string[] {
+  return originalSize > 0 ? [`  Saved: ${(((originalSize - outputSize) / originalSize) * 100).toFixed(1)}%`] : [];
 }
 
 /** The report for a successful single-file Conversion. */
@@ -58,13 +63,8 @@ export function conversionSuccessText(result: ConversionResult): string {
     `  Original size: ${formatBytes(result.originalSize)}`,
     `  Output size: ${formatBytes(result.outputSize)}`,
   ];
-  // A share of zero bytes is meaningless, so leave the line out (as the Batch summary does).
-  if (result.originalSize > 0) {
-    lines.push(
-      `  Saved: ${(((result.originalSize - result.outputSize) / result.originalSize) * 100).toFixed(1)}%`,
-    );
-  }
-  lines.push(`\nOutput saved to: ${result.destinationPath}`);
+  lines.push(...savedLine(result.originalSize, result.outputSize));
+  lines.push(`\nOutput saved to: ${result.output}`);
   return lines.join("\n");
 }
 
@@ -74,19 +74,17 @@ export function conversionFailureText(result: ConversionResult): string {
 }
 
 /** Why a Conversion was skipped, as shown in the result summary. */
-function skipReasonText(conversion: Conversion, format: FormatSpelling): string {
+function skipReasonText(conversion: SkippedConversion, format: FormatSpelling): string {
   switch (conversion.skip) {
     case "same-format":
-      return `already ${findOutputFormat(format)?.label ?? format.toUpperCase()}`;
+      return `already ${findOutputFormat(format).label}`;
     case "output-exists":
       return `${conversion.output} already exists`;
-    default:
-      return "not skipped";
   }
 }
 
 /** The report for a single-file Conversion that was skipped. */
-export function conversionSkippedText(conversion: Conversion, format: FormatSpelling): string {
+export function conversionSkippedText(conversion: SkippedConversion, format: FormatSpelling): string {
   return `\nSkipped ${conversion.source}: ${skipReasonText(conversion, format)}`;
 }
 
@@ -105,16 +103,14 @@ export function batchResultText(summary: RunSummary): string {
 
   const totalOriginal = converted.reduce((total, result) => total + result.originalSize, 0);
   const totalOutput = converted.reduce((total, result) => total + result.outputSize, 0);
-  if (totalOriginal > 0) {
-    lines.push(`  Saved: ${(((totalOriginal - totalOutput) / totalOriginal) * 100).toFixed(1)}%`);
-  }
+  lines.push(...savedLine(totalOriginal, totalOutput));
 
   lines.push(`\nOutput directory: ${summary.outputDirectory}`);
 
   if (failed.length > 0) {
     lines.push("\nFailed files:");
     for (const result of failed) {
-      lines.push(`  - ${result.sourcePath}: ${result.error}`);
+      lines.push(`  - ${result.source}: ${result.error}`);
     }
   }
 
