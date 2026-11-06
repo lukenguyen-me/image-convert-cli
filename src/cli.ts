@@ -1,212 +1,201 @@
-import * as path from "node:path";
-import { spawn } from "node:child_process";
-import type { ConvertOptions } from "./types";
-import { IPromptService, InteractivePromptService } from "./prompts";
-import { convertImage, displayConversionResult, convertBatch, displayBatchResult } from "./converter";
-import { getDefaultDestinationPath, isDirectory, getImageFilesFromDirectory } from "./utils/path";
-import type { BatchConversionSettings } from "./types";
+import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
+import type { Terminal } from "./terminal";
+import type { Updater } from "./updater";
+import { convertBatch, convertImage } from "./converter";
+import { getDefaultDestinationPath, getImageFilesFromDirectory, isDirectory } from "./utils/path";
+import {
+  BANNER,
+  HELP_TEXT,
+  batchResultText,
+  conversionFailureText,
+  conversionSuccessText,
+  settingsText,
+} from "./messages";
 import packageJson from "../package.json" with { type: "json" };
 
-const NPM_REGISTRY_URL = "https://registry.npmjs.org/image-convert-cli/latest";
-
-export async function executeUpdate(): Promise<void> {
-  return new Promise((resolve) => {
-    console.log("Updating image-convert-cli...");
-
-    const child = spawn("bun", ["add", "-g", "image-convert-cli"], {
-      stdio: ["inherit", "pipe", "pipe"],
-    });
-
-    child.stdout?.on("data", (data) => {
-      process.stdout.write(data);
-    });
-
-    child.stderr?.on("data", (data) => {
-      process.stderr.write(data);
-    });
-
-    child.on("close", (code) => {
-      if (code === 0) {
-        console.log("Update completed successfully.");
-      } else {
-        console.error(`Update failed with exit code: ${code}`);
-      }
-      resolve();
-    });
-
-    child.on("error", (error) => {
-      console.error(`Update failed: ${error.message}`);
-      resolve();
-    });
-  });
-}
-
-export async function promptForUpdate(
-  latestVersion: string,
-  promptService?: IPromptService,
-): Promise<boolean> {
-  const prompts = promptService || new InteractivePromptService();
-  return prompts.promptConfirm({
-    sourcePath: "",
-    targetFormat: "webp",
-    destinationPath: "",
-    compress: false,
-  });
-}
-
-export async function handleUpdate(
-  fetchVersion?: () => Promise<string>,
-  currentVersion?: string,
-  autoUpdate?: boolean,
-  promptService?: IPromptService,
-): Promise<void> {
-  const fetcher = fetchVersion || (async () => {
-    const response = await fetch(NPM_REGISTRY_URL);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch version: ${response.statusText}`);
-    }
-    const data = await response.json() as { version: string };
-    return data.version;
-  });
-
-  const version = currentVersion || process.env.npm_package_version || packageJson.version;
-
-  try {
-    const latestVersion = await fetcher();
-
-    if (latestVersion === version) {
-      console.log(`You are running the latest version: ${version}`);
-    } else {
-      console.log(`Update available: ${version} -> ${latestVersion}`);
-
-      if (autoUpdate) {
-        await executeUpdate();
-      } else {
-        const shouldUpdate = await promptForUpdate(latestVersion, promptService);
-        if (shouldUpdate) {
-          await executeUpdate();
-        } else {
-          console.log("Update cancelled.");
-        }
-      }
-    }
-  } catch (error) {
-    console.error(`Error checking for updates: ${(error as Error).message}`);
+/**
+ * Run `imgc` with the given arguments (without the executable and script path).
+ * All asking and telling goes through `terminal`; all version lookups and installs
+ * go through `updater`. Returns the process exit code; never exits the process.
+ */
+export async function main(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
+  if (argv[0] === "update") {
+    const autoUpdate = argv.includes("--yes") || argv.includes("-y");
+    await runUpdate(autoUpdate, terminal, updater);
+    return 0;
   }
-}
 
-export async function runCli(
-  options: ConvertOptions,
-  promptService?: IPromptService,
-): Promise<void> {
-  const prompts = promptService || new InteractivePromptService();
+  const options = parseArgs(argv);
 
   if (options.help) {
-    prompts.showHelp();
-    return;
+    terminal.say(HELP_TEXT);
+    return 0;
   }
 
   if (options.version) {
-    const version = process.env.npm_package_version || packageJson.version;
-    console.log(`image-convert-cli v${version}`);
-    return;
+    terminal.say(`image-convert-cli v${currentVersion()}`);
+    return 0;
   }
 
   if (options.yes && (!options.source || !options.format)) {
-    console.error("Error: -y mode requires --source and --format arguments");
-    prompts.showHelp();
-    return;
+    terminal.error("Error: -y mode requires --source and --format arguments");
+    terminal.say(HELP_TEXT);
+    return 0;
   }
 
-  console.log("Image Converter - Convert images between webp, jpeg, jpg, png, and svg\n");
-
-  const sourcePath = options.source || await prompts.promptSourceFile();
-
-  const targetFormat =
-    options.format || (await prompts.promptFormat());
-
-  // Check if source is a directory (batch mode)
-  const isBatchMode = isDirectory(sourcePath);
-
-  if (isBatchMode) {
-    await runBatchMode(sourcePath, targetFormat, options, prompts);
-    return;
-  }
-
-  // Single file conversion
-  const destinationPath =
-    options.destination ||
-    (await prompts.promptDestination(
-      getDefaultDestinationPath(sourcePath, targetFormat),
-    ));
-
-  const compress =
-    options.yes !== undefined ? options.yes : await prompts.promptCompress();
-
-  const settings = {
-    sourcePath,
-    targetFormat,
-    destinationPath,
-    compress,
-  };
-
-  prompts.showSettings(settings);
-
-  const shouldProceed =
-    options.yes !== undefined ? options.yes : await prompts.promptConfirm(settings);
-
-  if (!shouldProceed) {
-    console.log("Conversion cancelled.");
-    return;
-  }
-
-  const result = await convertImage(
-    sourcePath,
-    destinationPath,
-    targetFormat,
-    compress,
-  );
-
-  displayConversionResult(result);
-
-  if (!result.success) {
-    process.exit(1);
-  }
+  return runConvert(options, terminal);
 }
 
-async function runBatchMode(
+async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<number> {
+  terminal.say(BANNER);
+
+  const sourcePath = options.source || (await terminal.askSourcePath());
+  const targetFormat = options.format || (await terminal.askFormat());
+
+  if (isDirectory(sourcePath)) {
+    await runBatch(sourcePath, targetFormat, options, terminal);
+    return 0;
+  }
+
+  const destinationPath =
+    options.destination ||
+    (await terminal.askDestination(getDefaultDestinationPath(sourcePath, targetFormat)));
+
+  const compress =
+    options.yes !== undefined
+      ? options.yes
+      : await terminal.confirm("Do you want to compress the image?", false);
+
+  const settings = { sourcePath, targetFormat, destinationPath, compress };
+
+  terminal.say(settingsText(settings));
+
+  const shouldProceed =
+    options.yes !== undefined
+      ? options.yes
+      : await terminal.confirm("Proceed with conversion?", true);
+
+  if (!shouldProceed) {
+    terminal.say("Conversion cancelled.");
+    return 0;
+  }
+
+  const result = await convertImage(sourcePath, destinationPath, targetFormat, compress);
+
+  if (result.success) {
+    terminal.say(conversionSuccessText(result));
+    return 0;
+  }
+  terminal.error(conversionFailureText(result));
+  return 1;
+}
+
+async function runBatch(
   sourceDir: string,
-  targetFormat: string,
+  targetFormat: SupportedFormat,
   options: ConvertOptions,
-  prompts: IPromptService,
+  terminal: Terminal,
 ): Promise<void> {
   const yesMode = options.yes === true;
 
-  // Get destination directory - default to same as source
-  const destinationDir = options.destination || (yesMode ? sourceDir : await prompts.promptBatchDestination(sourceDir));
+  // Destination directory defaults to the source directory
+  const destinationDir =
+    options.destination || (yesMode ? sourceDir : await terminal.askOutputDirectory(sourceDir));
 
-  const compress = yesMode ? false : await prompts.promptCompress();
+  const compress = yesMode
+    ? false
+    : await terminal.confirm("Do you want to compress the image?", false);
 
-  // Count files to convert
-  const files = getImageFilesFromDirectory(sourceDir);
-
-  // In non-yes mode, show batch confirmation
   if (!yesMode) {
-    const shouldProceed = await prompts.promptBatchConfirm(files.length);
+    const files = getImageFilesFromDirectory(sourceDir);
+    const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
     if (!shouldProceed) {
-      console.log("Batch conversion cancelled.");
+      terminal.say("Batch conversion cancelled.");
       return;
     }
   }
 
-  const batchSettings: BatchConversionSettings = {
+  const settings: BatchConversionSettings = {
     sourceDir,
-    targetFormat: targetFormat as any,
+    targetFormat,
     destinationDir,
     compress,
     yesMode,
   };
 
-  const result = await convertBatch(batchSettings);
-  displayBatchResult(result);
+  const summary = await convertBatch(settings);
+  terminal.say(batchResultText(summary));
+}
+
+async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<void> {
+  const version = currentVersion();
+
+  try {
+    const latestVersion = await updater.latestVersion();
+
+    if (latestVersion === version) {
+      terminal.say(`You are running the latest version: ${version}`);
+    } else {
+      terminal.say(`Update available: ${version} -> ${latestVersion}`);
+
+      // Today's update prompt reuses the conversion confirmation wording.
+      const shouldUpdate = autoUpdate || (await terminal.confirm("Proceed with conversion?", true));
+      if (shouldUpdate) {
+        await install(latestVersion, terminal, updater);
+      } else {
+        terminal.say("Update cancelled.");
+      }
+    }
+  } catch (error) {
+    terminal.error(`Error checking for updates: ${(error as Error).message}`);
+  }
+}
+
+async function install(version: string, terminal: Terminal, updater: Updater): Promise<void> {
+  terminal.say("Updating image-convert-cli...");
+  const outcome = await updater.install(version, (chunk, stream) => terminal.relay(chunk, stream));
+  if (outcome.status === "installed") {
+    terminal.say("Update completed successfully.");
+  } else if (outcome.status === "exited") {
+    terminal.error(`Update failed with exit code: ${outcome.exitCode}`);
+  } else {
+    terminal.error(`Update failed: ${outcome.message}`);
+  }
+}
+
+function currentVersion(): string {
+  return process.env.npm_package_version || packageJson.version;
+}
+
+function parseArgs(args: string[]): ConvertOptions {
+  const options: ConvertOptions = {};
+
+  // Check for version command (positional argument)
+  if (args[0] === "version") {
+    options.version = true;
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--help" || arg === "-h") {
+      options.help = true;
+    } else if (arg === "--version" || arg === "-v") {
+      options.version = true;
+    } else if (arg === "--yes" || arg === "-y") {
+      options.yes = true;
+    } else if (arg === "--source" || arg === "-s") {
+      options.source = args[++i];
+    } else if (arg === "--format" || arg === "-f") {
+      const format = args[++i] as SupportedFormat | undefined;
+      if (format && ["webp", "jpeg", "jpg", "png", "ico"].includes(format)) {
+        options.format = format;
+      }
+    } else if (arg === "--dest" || arg === "-d") {
+      options.destination = args[++i];
+    } else if (arg === "--compress" || arg === "-c") {
+      options.compress = true;
+    }
+  }
+
+  return options;
 }
