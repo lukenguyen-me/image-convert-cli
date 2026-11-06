@@ -142,7 +142,9 @@ export function parseCommand(argv: string[]): Command {
     return { kind: "update", autoInstall: values.yes === true };
   }
 
-  if (values.format !== undefined && !isFormatSpelling(values.format)) {
+  // Any case is accepted; the lower-cased spelling is the output extension.
+  const format = values.format?.toLowerCase();
+  if (format !== undefined && !isFormatSpelling(format)) {
     throw new UsageError(`--format '${values.format}' is not an Output Format; use one of ${FORMAT_SPELLINGS.join(", ")}`);
   }
 
@@ -150,7 +152,7 @@ export function parseCommand(argv: string[]): Command {
     kind: "convert",
     request: {
       source: values.source,
-      format: values.format,
+      format,
       destination: values.dest,
       compress: values.compress ? true : undefined,
       unattended: values.yes === true,

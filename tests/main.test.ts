@@ -81,7 +81,7 @@ describe("main", () => {
     // argv → a fragment the error must contain, naming the problem.
     const cases: [argv: string[], names: string][] = [
       [["-s", "photo.png", "--format", "gif"], "--format 'gif'"],
-      [["-s", "photo.png", "-f", "WEBP"], "--format 'WEBP'"],
+      [["-s", "photo.png", "-f", "GIF"], "--format 'GIF'"],
       [["--fromat", "webp"], "'--fromat'"],
       [["-x"], "'-x'"],
       [["--source"], "--source needs a value"],
@@ -306,6 +306,19 @@ describe("main", () => {
       expect(fs.existsSync(destination)).toBe(false);
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
     });
+
+    for (const [typed, extension, written] of [["JPG", "jpg", "jpeg"], ["WebP", "webp", "webp"], ["JPEG", "jpeg", "jpeg"]]) {
+      it(`--format ${typed} is accepted in any case and writes a .${extension} file`, async () => {
+        const source = path.join(dir, "photo.png");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", source, "-f", typed], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readdirSync(dir).sort()).toEqual(["photo.png", `photo.${extension}`].sort());
+        expect((await sharp(path.join(dir, `photo.${extension}`)).metadata()).format).toBe(written);
+      });
+    }
 
     for (const spelling of ["jpeg", "jpg"]) {
       it(`--format ${spelling} offers a .${spelling} destination and writes it`, async () => {
