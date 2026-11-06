@@ -591,4 +591,46 @@ describe("main", () => {
       expect(fs.readFileSync(path.join(dir, "in", "b.webp"))).toEqual(plain);
     });
   });
+
+  describe("Conversion Plan", () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-plan-"));
+    });
+
+    afterEach(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    /** Write a small real image in the format its extension names. */
+    async function writeImage(name: string): Promise<string> {
+      const filePath = path.join(dir, name);
+      const format = path.extname(name).slice(1).replace("jpg", "jpeg") as keyof sharp.FormatEnum;
+      await sharp({ create: { width: 4, height: 4, channels: 3, background: "#36c" } })
+        .toFormat(format)
+        .toFile(filePath);
+      return filePath;
+    }
+
+    async function formatOf(filePath: string): Promise<string | undefined> {
+      return (await sharp(filePath).metadata()).format;
+    }
+
+    it("a Batch keeps the source extension only for sources whose output names collide", async () => {
+      await writeImage("photo.png");
+      await writeImage("photo.jpg");
+      await writeImage("other.png");
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(dir).sort()).toEqual([
+        "other.png", "other.webp", "photo.jpg", "photo.jpg.webp", "photo.png", "photo.png.webp",
+      ]);
+      expect(await formatOf(path.join(dir, "photo.png.webp"))).toBe("webp");
+      expect(await formatOf(path.join(dir, "photo.jpg.webp"))).toBe("webp");
+    });
+  });
 });

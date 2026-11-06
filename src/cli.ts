@@ -1,9 +1,10 @@
-import type { BatchConversionSettings } from "./types";
+import * as fs from "node:fs";
+import type { BatchConversionSummary, ConversionResult } from "./types";
 import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
-import { convertBatch, convertImage } from "./converter";
-import { getImageFilesFromDirectory } from "./utils/path";
+import { convertImage } from "./converter";
+import { planConversions } from "./plan";
 import { HELP_TEXT, UsageError, parseCommand } from "./command";
 import { type ConvertSettings, fillIn } from "./settings";
 import {
@@ -80,24 +81,41 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
 }
 
 async function runBatch(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
+  const startTime = Date.now();
+  const plan = planConversions(settings);
+
+  if (settings.unattended) {
+    for (const conversion of plan.conversions) {
+      if (!conversion.skip && fs.existsSync(conversion.output)) {
+        conversion.skip = "output-exists";
+      }
+    }
+  }
+
+  const toRun = plan.conversions.filter((conversion) => !conversion.skip);
+
   if (!settings.unattended) {
-    const files = getImageFilesFromDirectory(settings.source);
-    const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
+    const shouldProceed = await terminal.confirm(`Convert ${plan.conversions.length} files?`, true);
     if (!shouldProceed) {
       terminal.say("Batch conversion cancelled.");
       return ExitCode.Cancelled;
     }
   }
 
-  const batchSettings: BatchConversionSettings = {
-    sourceDir: settings.source,
-    targetFormat: settings.format,
-    destinationDir: settings.destination,
-    compress: settings.compress,
-    yesMode: settings.unattended,
-  };
+  fs.mkdirSync(plan.outputDirectory, { recursive: true });
+  const results: ConversionResult[] = [];
+  for (const conversion of toRun) {
+    results.push(await convertImage(conversion.source, conversion.output, settings.format, settings.compress));
+  }
 
-  const summary = await convertBatch(batchSettings);
+  const summary: BatchConversionSummary = {
+    totalFiles: plan.conversions.length,
+    successCount: results.filter((result) => result.success).length,
+    failureCount: results.filter((result) => !result.success).length,
+    skippedCount: plan.conversions.length - toRun.length,
+    results,
+    totalElapsed: Date.now() - startTime,
+  };
   terminal.say(batchResultText(summary));
   return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
 }
