@@ -134,9 +134,11 @@ export function parseCommand(argv: string[]): Command {
     return { kind: "help" };
   }
   if (values.version || command === "version") {
+    rejectFlagsOtherThan(values, "version", ["version"]);
     return { kind: "version" };
   }
   if (command === "update") {
+    rejectFlagsOtherThan(values, "update", ["yes"]);
     return { kind: "update", autoInstall: values.yes === true };
   }
 
@@ -155,6 +157,18 @@ export function parseCommand(argv: string[]): Command {
       overwrite: values.overwrite === true,
     },
   };
+}
+
+/** A command other than convert takes only its own flags; a conversion flag there is a mistake, not a no-op. */
+function rejectFlagsOtherThan(
+  values: Partial<Record<FlagName, unknown>>,
+  command: "version" | "update",
+  allowed: readonly FlagName[],
+): void {
+  const stray = (Object.keys(FLAGS) as FlagName[]).find((name) => values[name] !== undefined && !allowed.includes(name));
+  if (stray !== undefined) {
+    throw new UsageError(`--${stray} does not apply to 'imgc ${command}'`);
+  }
 }
 
 function parseStrict(argv: string[]) {

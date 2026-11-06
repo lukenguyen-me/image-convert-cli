@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Unattended Runs skip output files that already exist unless `--overwrite` is given. Single-file runs no longer overwrite silently.
 - Exit codes: 0 on success, 1 when a Conversion or any file in a Batch fails, 2 for a usage error, 130 when you cancel.
 - A bad or unknown flag, a bad `--format`, a missing `--source`/`--format` with `-y`, or a source that isn't a known Input Format exits 2 with an error and a pointer to `imgc --help`.
+- `imgc update` accepts only `-y`, and `imgc version` accepts no flags: a conversion flag such as `-c` or `--source` there exits 2 instead of being ignored.
 - Declining a confirmation or pressing Ctrl-C at a prompt exits 130.
 - The interactive JPEG choice writes `.jpg`. On the command line the spelling you type picks the extension: `-f jpg` writes `.jpg`, `-f jpeg` writes `.jpeg`.
 - In a Batch, sources whose output names would collide keep their extension: `photo.png` and `photo.jpg` become `photo.png.webp` and `photo.jpg.webp`.

@@ -95,6 +95,14 @@ describe("main", () => {
       [["-y"], "--source is required with -y"],
       [["convert", "-s", "photo.png"], "'convert'"],
       [["update", "--fromat"], "'--fromat'"],
+      [["update", "--source", "x.png", "--format", "webp", "-c"], "--source does not apply to 'imgc update'"],
+      [["update", "-c"], "--compress does not apply to 'imgc update'"],
+      [["update", "-d", "out"], "--dest does not apply to 'imgc update'"],
+      [["update", "--overwrite"], "--overwrite does not apply to 'imgc update'"],
+      [["version", "-c", "--overwrite"], "--compress does not apply to 'imgc version'"],
+      [["version", "-y"], "--yes does not apply to 'imgc version'"],
+      [["--version", "-s", "x.png"], "--source does not apply to 'imgc version'"],
+      [["-v", "-f", "webp"], "--format does not apply to 'imgc version'"],
     ];
 
     for (const [argv, names] of cases) {
