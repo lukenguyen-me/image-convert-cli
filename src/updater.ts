@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { OutputStream } from "./terminal";
 
-export const PACKAGE_NAME = "image-convert-cli";
+const PACKAGE_NAME = "image-convert-cli";
 const NPM_REGISTRY_URL = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`;
 
 export type InstallOutcome =
