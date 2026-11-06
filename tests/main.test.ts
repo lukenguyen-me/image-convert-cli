@@ -307,7 +307,12 @@ describe("main", () => {
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
     });
 
-    for (const [typed, extension, written] of [["JPG", "jpg", "jpeg"], ["WebP", "webp", "webp"], ["JPEG", "jpeg", "jpeg"]]) {
+    const anyCase: [typed: string, extension: string, written: keyof sharp.FormatEnum][] = [
+      ["JPG", "jpg", "jpeg"],
+      ["WebP", "webp", "webp"],
+      ["JPEG", "jpeg", "jpeg"],
+    ];
+    for (const [typed, extension, written] of anyCase) {
       it(`--format ${typed} is accepted in any case and writes a .${extension} file`, async () => {
         const source = path.join(dir, "photo.png");
         const terminal = new ScriptedTerminal();
