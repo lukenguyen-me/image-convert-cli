@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import type { BatchConversionSummary, ConversionResult, ConversionSettings } from "./types";
 import { formatBytes } from "./utils/format";
-import { FORMAT_SPELLINGS, INPUT_FORMATS, OUTPUT_FORMATS } from "./formats";
+import { INPUT_FORMATS, OUTPUT_FORMATS } from "./formats";
 
 /** "a, b, c" joined with a final conjunction: "a, b or c". */
 function listWith(items: readonly string[], conjunction: string): string {
@@ -14,41 +14,14 @@ const inputExtensions = INPUT_FORMATS.flatMap((format) => format.extensions);
 
 export const BANNER = `Image Converter - Convert ${listWith(inputLabels, "or")} images to ${listWith(outputLabels, "or")}\n`;
 
-export const HELP_TEXT = `Image Converter CLI
-
-Usage:
-  imgc [options]
-  imgc --source <path> --format <format> [options]
-  imgc -y --source <path> --format <format>
-  imgc update                     # Check for updates
-  imgc version                    # Show version
-
-Options:
-  --help, -h       Show this help message
-  --version, -v    Show version number
-  --yes, -y        Non-interactive mode (use defaults for optional prompts)
-  --source, -s     Source file path (required with -y)
-  --format, -f     Target format: ${FORMAT_SPELLINGS.slice(0, -1).join(", ")}, or ${FORMAT_SPELLINGS.at(-1)} (required with -y)
-                   Input formats: ${inputExtensions.join(", ")}
-  --dest, -d       Destination path (optional, auto-generated if not provided)
-  --compress, -c   Enable compression (optional, default: false)
-
-Commands:
-  update              Check for the latest version on npm
-  version             Show version number
-
-Examples:
-  imgc                           # Interactive mode
-  imgc --help                    # Show help
-  imgc --version                 # Show version
-  imgc -y --source photo.png --format webp
-  imgc -y --source photo.jpg --format jpeg --compress
-  imgc update                    # Check for updates
-`;
-
-/** The error for a single source that isn't a known Input Format. */
+/** The problem with a single source that isn't a known Input Format. */
 export function unsupportedInputFormatText(sourcePath: string): string {
-  return `Error: Unsupported input format: ${sourcePath}\nSupported input formats: ${inputExtensions.join(", ")}`;
+  return `Unsupported input format: ${sourcePath}\nSupported input formats: ${inputExtensions.join(", ")}`;
+}
+
+/** The report for a usage error: the problem, then where to look for the right usage. */
+export function usageErrorText(problem: string): string {
+  return `Error: ${problem}\nRun 'imgc --help' for usage.`;
 }
 
 export function settingsText(settings: ConversionSettings): string {

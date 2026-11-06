@@ -2,16 +2,6 @@ import type { FormatSpelling } from "./formats";
 
 export type { FormatSpelling } from "./formats";
 
-export type ConvertOptions = {
-  help?: boolean;
-  version?: boolean;
-  yes?: boolean;
-  source?: string;
-  format?: FormatSpelling;
-  destination?: string;
-  compress?: boolean;
-};
-
 export type ConversionResult = {
   success: boolean;
   sourcePath: string;

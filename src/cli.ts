@@ -1,19 +1,19 @@
-import type { BatchConversionSettings, ConvertOptions } from "./types";
-import { type FormatSpelling, findInputFormat, isFormatSpelling } from "./formats";
+import type { BatchConversionSettings } from "./types";
 import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertBatch, convertImage } from "./converter";
-import { getDefaultDestinationPath, getImageFilesFromDirectory, isDirectory } from "./utils/path";
+import { getImageFilesFromDirectory } from "./utils/path";
+import { HELP_TEXT, UsageError, parseCommand } from "./command";
+import { type ConvertSettings, fillIn } from "./settings";
 import {
   BANNER,
-  HELP_TEXT,
   batchResultText,
   conversionFailureText,
   conversionSuccessText,
   settingsText,
-  unsupportedInputFormatText,
   updatePromptText,
+  usageErrorText,
 } from "./messages";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -29,78 +29,47 @@ export async function main(argv: string[], terminal: Terminal, updater: Updater)
     if (error instanceof PromptCancelled) {
       return ExitCode.Cancelled;
     }
+    if (error instanceof UsageError) {
+      terminal.error(usageErrorText(error.message));
+      return ExitCode.UsageError;
+    }
     throw error;
   }
 }
 
 async function run(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
-  if (argv[0] === "update") {
-    const autoUpdate = argv.includes("--yes") || argv.includes("-y");
-    return runUpdate(autoUpdate, terminal, updater);
+  const command = parseCommand(argv);
+
+  switch (command.kind) {
+    case "help":
+      terminal.say(HELP_TEXT);
+      return ExitCode.Success;
+    case "version":
+      terminal.say(`image-convert-cli v${currentVersion()}`);
+      return ExitCode.Success;
+    case "update":
+      return runUpdate(command.autoInstall, terminal, updater);
+    case "convert": {
+      terminal.say(BANNER);
+      const settings = await fillIn(command.request, terminal);
+      return settings.sourceIsDirectory ? runBatch(settings, terminal) : runConvert(settings, terminal);
+    }
   }
-
-  const options = parseArgs(argv);
-
-  if (options.help) {
-    terminal.say(HELP_TEXT);
-    return 0;
-  }
-
-  if (options.version) {
-    terminal.say(`image-convert-cli v${currentVersion()}`);
-    return 0;
-  }
-
-  if (options.yes && (!options.source || !options.format)) {
-    terminal.error("Error: -y mode requires --source and --format arguments");
-    terminal.say(HELP_TEXT);
-    return 0;
-  }
-
-  return runConvert(options, terminal);
 }
 
-async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<ExitCode> {
-  terminal.say(BANNER);
+async function runConvert(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
+  const { source, format, destination, compress } = settings;
 
-  const sourcePath = options.source || (await terminal.askSourcePath());
-  const sourceIsDirectory = isDirectory(sourcePath);
+  terminal.say(settingsText({ sourcePath: source, targetFormat: format, destinationPath: destination, compress }));
 
-  if (!sourceIsDirectory && !findInputFormat(sourcePath)) {
-    terminal.error(unsupportedInputFormatText(sourcePath));
-    return ExitCode.ConversionFailed;
-  }
-
-  const targetFormat = options.format || (await terminal.askFormat());
-
-  if (sourceIsDirectory) {
-    return runBatch(sourcePath, targetFormat, options, terminal);
-  }
-
-  const destinationPath =
-    options.destination ||
-    (await terminal.askDestination(getDefaultDestinationPath(sourcePath, targetFormat)));
-
-  const compress =
-    options.yes !== undefined
-      ? options.yes
-      : await terminal.confirm("Do you want to compress the image?", false);
-
-  const settings = { sourcePath, targetFormat, destinationPath, compress };
-
-  terminal.say(settingsText(settings));
-
-  const shouldProceed =
-    options.yes !== undefined
-      ? options.yes
-      : await terminal.confirm("Proceed with conversion?", true);
+  const shouldProceed = settings.unattended || (await terminal.confirm("Proceed with conversion?", true));
 
   if (!shouldProceed) {
     terminal.say("Conversion cancelled.");
     return ExitCode.Cancelled;
   }
 
-  const result = await convertImage(sourcePath, destinationPath, targetFormat, compress);
+  const result = await convertImage(source, destination, format, compress);
 
   if (result.success) {
     terminal.say(conversionSuccessText(result));
@@ -110,24 +79,9 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
   return ExitCode.ConversionFailed;
 }
 
-async function runBatch(
-  sourceDir: string,
-  targetFormat: FormatSpelling,
-  options: ConvertOptions,
-  terminal: Terminal,
-): Promise<ExitCode> {
-  const yesMode = options.yes === true;
-
-  // Destination directory defaults to the source directory
-  const destinationDir =
-    options.destination || (yesMode ? sourceDir : await terminal.askOutputDirectory(sourceDir));
-
-  const compress = yesMode
-    ? false
-    : await terminal.confirm("Do you want to compress the image?", false);
-
-  if (!yesMode) {
-    const files = getImageFilesFromDirectory(sourceDir);
+async function runBatch(settings: ConvertSettings, terminal: Terminal): Promise<ExitCode> {
+  if (!settings.unattended) {
+    const files = getImageFilesFromDirectory(settings.source);
     const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
     if (!shouldProceed) {
       terminal.say("Batch conversion cancelled.");
@@ -135,15 +89,15 @@ async function runBatch(
     }
   }
 
-  const settings: BatchConversionSettings = {
-    sourceDir,
-    targetFormat,
-    destinationDir,
-    compress,
-    yesMode,
+  const batchSettings: BatchConversionSettings = {
+    sourceDir: settings.source,
+    targetFormat: settings.format,
+    destinationDir: settings.destination,
+    compress: settings.compress,
+    yesMode: settings.unattended,
   };
 
-  const summary = await convertBatch(settings);
+  const summary = await convertBatch(batchSettings);
   terminal.say(batchResultText(summary));
   return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
 }
@@ -190,37 +144,4 @@ async function install(version: string, terminal: Terminal, updater: Updater): P
 
 function currentVersion(): string {
   return process.env.npm_package_version || packageJson.version;
-}
-
-function parseArgs(args: string[]): ConvertOptions {
-  const options: ConvertOptions = {};
-
-  // Check for version command (positional argument)
-  if (args[0] === "version") {
-    options.version = true;
-  }
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--help" || arg === "-h") {
-      options.help = true;
-    } else if (arg === "--version" || arg === "-v") {
-      options.version = true;
-    } else if (arg === "--yes" || arg === "-y") {
-      options.yes = true;
-    } else if (arg === "--source" || arg === "-s") {
-      options.source = args[++i];
-    } else if (arg === "--format" || arg === "-f") {
-      const format = args[++i];
-      if (format && isFormatSpelling(format)) {
-        options.format = format;
-      }
-    } else if (arg === "--dest" || arg === "-d") {
-      options.destination = args[++i];
-    } else if (arg === "--compress" || arg === "-c") {
-      options.compress = true;
-    }
-  }
-
-  return options;
 }

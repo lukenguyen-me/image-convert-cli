@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
 import { type FormatSpelling, formatPromptChoices } from "./formats";
+import { expandHome } from "./settings";
 
 export type OutputStream = "stdout" | "stderr";
 
@@ -131,7 +132,7 @@ export class InteractiveTerminal implements Terminal {
       if (!input.trim()) {
         return "Please enter a file path";
       }
-      if (!fs.existsSync(input)) {
+      if (!fs.existsSync(expandHome(input))) {
         return "File does not exist";
       }
       return true;
@@ -154,7 +155,7 @@ export class InteractiveTerminal implements Terminal {
       if (!input.trim()) {
         return "Please enter a destination path";
       }
-      const dir = path.dirname(input);
+      const dir = path.dirname(expandHome(input));
       if (dir !== "." && !fs.existsSync(dir)) {
         return "Destination directory does not exist";
       }
@@ -167,7 +168,7 @@ export class InteractiveTerminal implements Terminal {
       if (!input.trim()) {
         return "Please enter an output directory";
       }
-      if (!fs.existsSync(input)) {
+      if (!fs.existsSync(expandHome(input))) {
         return "Output directory does not exist";
       }
       return true;
