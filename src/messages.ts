@@ -1,7 +1,8 @@
-import * as path from "node:path";
-import type { BatchConversionSummary, ConversionResult, ConversionSettings } from "./types";
+import type { ConversionResult, RunSummary } from "./types";
+import type { Conversion } from "./plan";
+import type { ConvertSettings } from "./settings";
 import { formatBytes } from "./utils/format";
-import { INPUT_FORMATS, OUTPUT_FORMATS } from "./formats";
+import { type FormatSpelling, INPUT_FORMATS, OUTPUT_FORMATS, findOutputFormat } from "./formats";
 
 /** "a, b, c" joined with a final conjunction: "a, b or c". */
 function listWith(items: readonly string[], conjunction: string): string {
@@ -14,6 +15,21 @@ const inputExtensions = INPUT_FORMATS.flatMap((format) => format.extensions);
 
 export const BANNER = `Image Converter - Convert ${listWith(inputLabels, "or")} images to ${listWith(outputLabels, "or")}\n`;
 
+/** How the user can resolve Conversions whose output files already exist. */
+export type ExistingOutputsChoice = "overwrite" | "skip" | "cancel";
+
+/** The choices for existing output files, in the order they are offered. */
+export const EXISTING_OUTPUTS_CHOICES: readonly { value: ExistingOutputsChoice; name: string }[] = [
+  { value: "overwrite", name: "overwrite all" },
+  { value: "skip", name: "skip them" },
+  { value: "cancel", name: "cancel" },
+];
+
+/** The question asked once when the plan would replace `count` existing files, before the choices. */
+export function existingOutputsQuestion(count: number): string {
+  return count === 1 ? "1 file exists" : `${count} files exist`;
+}
+
 /** The problem with a single source that isn't a known Input Format. */
 export function unsupportedInputFormatText(sourcePath: string): string {
   return `Unsupported input format: ${sourcePath}\nSupported input formats: ${inputExtensions.join(", ")}`;
@@ -24,12 +40,12 @@ export function usageErrorText(problem: string): string {
   return `Error: ${problem}\nRun 'imgc --help' for usage.`;
 }
 
-export function settingsText(settings: ConversionSettings): string {
+export function settingsText(settings: ConvertSettings): string {
   return [
     "\nConversion settings:",
-    `  Source: ${settings.sourcePath}`,
-    `  Target format: ${settings.targetFormat.toUpperCase()}`,
-    `  Destination: ${settings.destinationPath}`,
+    `  Source: ${settings.source}`,
+    `  Target format: ${settings.format.toUpperCase()}`,
+    `  Destination: ${settings.destination}`,
     `  Compression: ${settings.compress ? "Yes" : "No"}`,
   ].join("\n");
 }
@@ -57,44 +73,55 @@ export function conversionFailureText(result: ConversionResult): string {
   return `\n✗ Conversion failed: ${result.error}`;
 }
 
-export function batchResultText(summary: BatchConversionSummary): string {
+/** Why a Conversion was skipped, as shown in the result summary. */
+export function skipReasonText(conversion: Conversion, format: FormatSpelling): string {
+  switch (conversion.skip) {
+    case "same-format":
+      return `already ${findOutputFormat(format)?.label ?? format.toUpperCase()}`;
+    case "output-exists":
+      return `${conversion.output} already exists`;
+    default:
+      return "not skipped";
+  }
+}
+
+/** The report for a single-file Conversion that was skipped. */
+export function conversionSkippedText(conversion: Conversion, format: FormatSpelling): string {
+  return `\nSkipped ${conversion.source}: ${skipReasonText(conversion, format)}`;
+}
+
+/** The result summary of a Batch. */
+export function batchResultText(summary: RunSummary): string {
+  const converted = summary.results.filter((result) => result.success);
+  const failed = summary.results.filter((result) => !result.success);
   const lines = [
     "\nBatch conversion complete!",
     `  Total files: ${summary.totalFiles}`,
-    `  Converted: ${summary.successCount}`,
-    `  Failed: ${summary.failureCount}`,
-    `  Skipped: ${summary.skippedCount}`,
+    `  Converted: ${converted.length}`,
+    `  Failed: ${failed.length}`,
+    `  Skipped: ${summary.skipped.length}`,
     `  Time: ${summary.totalElapsed}ms`,
   ];
 
-  if (summary.successCount > 0) {
-    let totalOriginal = 0;
-    let totalOutput = 0;
+  const totalOriginal = converted.reduce((total, result) => total + result.originalSize, 0);
+  const totalOutput = converted.reduce((total, result) => total + result.outputSize, 0);
+  if (totalOriginal > 0) {
+    lines.push(`  Saved: ${(((totalOriginal - totalOutput) / totalOriginal) * 100).toFixed(1)}%`);
+  }
 
-    for (const result of summary.results) {
-      if (result.success) {
-        totalOriginal += result.originalSize;
-        totalOutput += result.outputSize;
-      }
-    }
+  lines.push(`\nOutput directory: ${summary.outputDirectory}`);
 
-    if (totalOriginal > 0) {
-      lines.push(
-        `  Saved: ${(((totalOriginal - totalOutput) / totalOriginal) * 100).toFixed(1)}%`,
-      );
+  if (failed.length > 0) {
+    lines.push("\nFailed files:");
+    for (const result of failed) {
+      lines.push(`  - ${result.sourcePath}: ${result.error}`);
     }
   }
 
-  lines.push(
-    `\nOutput directory: ${summary.results[0]?.destinationPath ? path.dirname(summary.results[0].destinationPath) : "N/A"}`,
-  );
-
-  if (summary.failureCount > 0) {
-    lines.push("\nFailed files:");
-    for (const result of summary.results) {
-      if (!result.success) {
-        lines.push(`  - ${result.sourcePath}: ${result.error}`);
-      }
+  if (summary.skipped.length > 0) {
+    lines.push("\nSkipped files:");
+    for (const conversion of summary.skipped) {
+      lines.push(`  - ${conversion.source}: ${skipReasonText(conversion, summary.format)}`);
     }
   }
 

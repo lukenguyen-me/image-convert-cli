@@ -1,5 +1,6 @@
 import { PromptCancelled, type OutputStream, type Terminal } from "./terminal";
 import type { FormatSpelling } from "./formats";
+import { EXISTING_OUTPUTS_CHOICES, type ExistingOutputsChoice, existingOutputsQuestion } from "./messages";
 
 /** Queue this in place of an answer to press Ctrl-C at that question. */
 export const CTRL_C = Symbol("Ctrl-C");
@@ -45,6 +46,17 @@ export class ScriptedTerminal implements Terminal {
 
   async askOutputDirectory(defaultDir: string): Promise<string> {
     return this.nextString(`Output directory (${defaultDir})`) || defaultDir;
+  }
+
+  /** Recorded as "N files exist: overwrite all / skip them / cancel"; answer "overwrite", "skip" or "cancel". */
+  async askExistingOutputs(outputPaths: readonly string[]): Promise<ExistingOutputsChoice> {
+    const question = `${existingOutputsQuestion(outputPaths.length)}: ${EXISTING_OUTPUTS_CHOICES.map((choice) => choice.name).join(" / ")}`;
+    const answer = this.nextString(question);
+    const choice = EXISTING_OUTPUTS_CHOICES.find((candidate) => candidate.value === answer);
+    if (!choice) {
+      throw new Error(`ScriptedTerminal: expected overwrite, skip or cancel for "${question}", got ${JSON.stringify(answer)}`);
+    }
+    return choice.value;
   }
 
   async confirm(question: string, _defaultAnswer: boolean): Promise<boolean> {

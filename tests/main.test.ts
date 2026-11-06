@@ -44,13 +44,13 @@ describe("main", () => {
     it("lists only flags the parser accepts, in both long and short form", async () => {
       const help = new ScriptedTerminal();
       await main(["--help"], help, new InMemoryUpdater());
-      const listed = [...help.stdout.matchAll(/^ {2}(--[a-z]+), (-[a-z])(?: <[a-z]+>)?/gm)];
+      const listed = [...help.stdout.matchAll(/^ {2}(--[a-z]+)(?:, (-[a-z]))?(?: <[a-z]+>)?/gm)];
 
       expect(listed.map(([, long]) => long)).toEqual([
-        "--help", "--version", "--source", "--format", "--dest", "--compress", "--yes",
+        "--help", "--version", "--source", "--format", "--dest", "--compress", "--yes", "--overwrite",
       ]);
       for (const [usage, long, short] of listed) {
-        for (const flag of [long!, short!]) {
+        for (const flag of short ? [long!, short] : [long!]) {
           // --help comes first so each flag is only parsed, never acted on.
           const argv = usage.includes("<") ? ["--help", flag, "webp"] : ["--help", flag];
           const terminal = new ScriptedTerminal();
@@ -446,6 +446,27 @@ describe("main", () => {
       expect(fs.readdirSync(output).sort()).toEqual(["anim.png", "photo2.png", "scan.png"]);
     });
 
+    it("creates a --dest directory that doesn't exist yet", async () => {
+      const missing = path.join(output, "new", "dir");
+
+      const code = await main(["-y", "-s", source, "-f", "webp", "-d", missing], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(missing)).toEqual(["photo.webp"]);
+    });
+
+    it("rasterises SVG sources", async () => {
+      fs.writeFileSync(
+        path.join(source, "logo.svg"),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>',
+      );
+
+      const code = await main(["-y", "-s", source, "-f", "png", "-d", output], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect((await sharp(path.join(output, "logo.png")).metadata()).format).toBe("png");
+    });
+
     it("an Unattended Run honours --dest", async () => {
       const terminal = new ScriptedTerminal();
 
@@ -590,5 +611,269 @@ describe("main", () => {
       expect(fs.readFileSync(path.join(dir, "in", "a.webp"))).toEqual(plain);
       expect(fs.readFileSync(path.join(dir, "in", "b.webp"))).toEqual(plain);
     });
+  });
+
+  describe("Conversion Plan", () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-plan-"));
+    });
+
+    afterEach(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    /** Write a small real image in the format its extension names. */
+    async function writeImage(name: string): Promise<string> {
+      const filePath = path.join(dir, name);
+      const format = path.extname(name).slice(1).replace("jpg", "jpeg") as keyof sharp.FormatEnum;
+      await sharp({ create: { width: 4, height: 4, channels: 3, background: "#36c" } })
+        .toFormat(format)
+        .toFile(filePath);
+      return filePath;
+    }
+
+    async function formatOf(filePath: string): Promise<string | undefined> {
+      return (await sharp(filePath).metadata()).format;
+    }
+
+    it("a Batch keeps the source extension only for sources whose output names collide", async () => {
+      await writeImage("photo.png");
+      await writeImage("photo.jpg");
+      await writeImage("other.png");
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(dir).sort()).toEqual([
+        "other.png", "other.webp", "photo.jpg", "photo.jpg.webp", "photo.png", "photo.png.webp",
+      ]);
+      expect(await formatOf(path.join(dir, "photo.png.webp"))).toBe("webp");
+      expect(await formatOf(path.join(dir, "photo.jpg.webp"))).toBe("webp");
+    });
+
+    it("a Batch skips sources already in the Output Format and reports why", async () => {
+      await writeImage("a.png");
+      const already = await writeImage("b.webp");
+      const before = fs.readFileSync(already);
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(dir).sort()).toEqual(["a.png", "a.webp", "b.webp"]);
+      expect(fs.readFileSync(already)).toEqual(before);
+      expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
+      expect(terminal.stdout).toContain(`\nSkipped files:\n  - ${already}: already WebP\n`);
+    });
+
+    it("a Batch never writes over one of its own sources, even with --overwrite", async () => {
+      await writeImage("photo.png");
+      const already = await writeImage("photo.webp");
+      const before = fs.readFileSync(already);
+
+      const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp"], new ScriptedTerminal(), new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(already)).toEqual(before);
+      expect(fs.readdirSync(dir).sort()).toEqual(["photo.png", "photo.png.webp", "photo.webp"]);
+    });
+
+    describe("existing outputs in an Unattended Run", () => {
+      it("a Batch skips them and reports them as skipped", async () => {
+        await writeImage("a.png");
+        await writeImage("b.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(path.join(out, "b.webp"), "utf8")).toBe("old");
+        expect(await formatOf(path.join(out, "a.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
+        expect(terminal.stdout).toContain(
+          `\nSkipped files:\n  - ${path.join(dir, "b.png")}: ${path.join(out, "b.webp")} already exists\n`,
+        );
+      });
+
+      it("a Batch with --overwrite replaces them", async () => {
+        await writeImage("b.png");
+        const out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(await formatOf(path.join(out, "b.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 0\n");
+      });
+
+      it("a single-file run skips it, says so and exits 0", async () => {
+        const source = await writeImage("photo.png");
+        fs.writeFileSync(path.join(dir, "photo.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(path.join(dir, "photo.webp"), "utf8")).toBe("old");
+        expect(terminal.stdout).toEndWith(`\nSkipped ${source}: ${path.join(dir, "photo.webp")} already exists\n`);
+        expect(terminal.stdout).not.toContain("Conversion complete");
+      });
+
+      it("a single-file run with --overwrite replaces it", async () => {
+        const source = await writeImage("photo.png");
+        fs.writeFileSync(path.join(dir, "photo.webp"), "old");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "--overwrite", "-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(await formatOf(path.join(dir, "photo.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("\n✓ Conversion complete!\n");
+      });
+    });
+
+    describe("existing outputs in an interactive run", () => {
+      let out: string;
+
+      beforeEach(async () => {
+        for (const name of ["a.png", "b.png", "c.png"]) {
+          await writeImage(name);
+        }
+        out = path.join(dir, "out");
+        fs.mkdirSync(out);
+        fs.writeFileSync(path.join(out, "a.webp"), "old");
+        fs.writeFileSync(path.join(out, "b.webp"), "old");
+      });
+
+      const question = "2 files exist: overwrite all / skip them / cancel";
+
+      it("asks once; \"skip them\" skips exactly those and the confirmation counts the rest", async () => {
+        const terminal = new ScriptedTerminal([false, "skip", true]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question, "Convert 1 files?"]);
+        expect(fs.readFileSync(path.join(out, "a.webp"), "utf8")).toBe("old");
+        expect(fs.readFileSync(path.join(out, "b.webp"), "utf8")).toBe("old");
+        expect(await formatOf(path.join(out, "c.webp"))).toBe("webp");
+        expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 2\n");
+      });
+
+      it("\"overwrite all\" replaces them", async () => {
+        const terminal = new ScriptedTerminal([false, "overwrite", true]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question, "Convert 3 files?"]);
+        for (const name of ["a.webp", "b.webp", "c.webp"]) {
+          expect(await formatOf(path.join(out, name))).toBe("webp");
+        }
+      });
+
+      it("\"cancel\" writes nothing and exits 130", async () => {
+        const terminal = new ScriptedTerminal([false, "cancel"]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(130);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", question]);
+        expect(fs.readdirSync(out).sort()).toEqual(["a.webp", "b.webp"]);
+        expect(fs.readFileSync(path.join(out, "a.webp"), "utf8")).toBe("old");
+      });
+
+      it("Ctrl-C at the question writes nothing and exits 130", async () => {
+        const terminal = new ScriptedTerminal([false, CTRL_C]);
+
+        const code = await main(["-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(130);
+        expect(fs.readdirSync(out).sort()).toEqual(["a.webp", "b.webp"]);
+      });
+
+      it("--overwrite answers the question, so it isn't asked", async () => {
+        const terminal = new ScriptedTerminal([false, true]);
+
+        const code = await main(["--overwrite", "-s", dir, "-f", "webp", "-d", out], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual(["Do you want to compress the image?", "Convert 3 files?"]);
+        expect(await formatOf(path.join(out, "a.webp"))).toBe("webp");
+      });
+
+      it("a single-file run gets the same question", async () => {
+        const source = path.join(dir, "a.png");
+        const destination = path.join(out, "a.webp");
+
+        const skipped = new ScriptedTerminal([false, "skip"]);
+        const skipCode = await main(["-s", source, "-f", "webp", "-d", destination], skipped, new InMemoryUpdater());
+
+        expect(skipCode).toBe(0);
+        expect(skipped.asked).toEqual(["Do you want to compress the image?", "1 file exists: overwrite all / skip them / cancel"]);
+        expect(fs.readFileSync(destination, "utf8")).toBe("old");
+        expect(skipped.stdout).toEndWith(`\nSkipped ${source}: ${destination} already exists\n`);
+
+        const replaced = new ScriptedTerminal([false, "overwrite", true]);
+        const replaceCode = await main(["-s", source, "-f", "webp", "-d", destination], replaced, new InMemoryUpdater());
+
+        expect(replaceCode).toBe(0);
+        expect(replaced.asked.at(-1)).toBe("Proceed with conversion?");
+        expect(await formatOf(destination)).toBe("webp");
+      });
+    });
+
+    it("a single-file run re-encodes a same-format source to <name>.converted.<ext>, never over the source", async () => {
+      const source = await writeImage("photo.png");
+      const before = fs.readFileSync(source);
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", source, "-f", "png", "-c"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(source)).toEqual(before);
+      expect(await formatOf(path.join(dir, "photo.converted.png"))).toBe("png");
+      expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "photo.converted.png")}\n`);
+    });
+
+    it("an interactive same-format run offers <name>.converted.<ext> as the destination", async () => {
+      const source = await writeImage("photo.jpg");
+      const terminal = new ScriptedTerminal(["", false, true]);
+
+      const code = await main(["-s", source, "-f", "jpg"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.asked[0]).toBe(`Destination path (${path.join(dir, "photo.converted.jpg")})`);
+      expect(fs.readdirSync(dir).sort()).toEqual(["photo.converted.jpg", "photo.jpg"]);
+    });
+
+    for (const destination of ["photo.png", "./photo.png"]) {
+      it(`--dest equal to the source (${destination}) is refused with exit 2`, async () => {
+        const source = await writeImage("photo.png");
+        const before = fs.readFileSync(source);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(
+          ["-y", "-s", source, "-f", "png", "-d", path.join(dir, destination)],
+          terminal,
+          new InMemoryUpdater(),
+        );
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination is the source file ${source}; choose another output path`);
+        expect(terminal.stderr).toEndWith("Run 'imgc --help' for usage.\n");
+        expect(fs.readFileSync(source)).toEqual(before);
+        expect(fs.readdirSync(dir)).toEqual(["photo.png"]);
+      });
+    }
   });
 });
