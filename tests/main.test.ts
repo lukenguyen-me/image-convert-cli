@@ -77,7 +77,7 @@ describe("main", () => {
       const code = await main(["update"], terminal, updater);
 
       expect(code).toBe(0);
-      expect(terminal.asked).toEqual(["Proceed with conversion?"]);
+      expect(terminal.asked).toEqual([`Update image-convert-cli ${current} → 999.0.0?`]);
       expect(updater.installed).toEqual(["999.0.0"]);
       expect(terminal.stdout).toBe(
         `Update available: ${current} -> 999.0.0\n` +
@@ -86,15 +86,25 @@ describe("main", () => {
       );
     });
 
-    it("installs nothing when the user declines", async () => {
+    it("installs nothing and exits 130 when the user declines", async () => {
       const terminal = new ScriptedTerminal([false]);
       const updater = new InMemoryUpdater({ latest: "999.0.0" });
 
       const code = await main(["update"], terminal, updater);
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(updater.installed).toEqual([]);
       expect(terminal.stdout).toBe(`Update available: ${current} -> 999.0.0\nUpdate cancelled.\n`);
+    });
+
+    it("installs nothing and exits 130 when the user presses Ctrl-C at the prompt", async () => {
+      const terminal = new ScriptedTerminal([CTRL_C]);
+      const updater = new InMemoryUpdater({ latest: "999.0.0" });
+
+      const code = await main(["update"], terminal, updater);
+
+      expect(code).toBe(130);
+      expect(updater.installed).toEqual([]);
     });
 
     for (const flag of ["-y", "--yes"]) {

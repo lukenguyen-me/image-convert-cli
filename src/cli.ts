@@ -11,6 +11,7 @@ import {
   conversionFailureText,
   conversionSuccessText,
   settingsText,
+  updatePromptText,
 } from "./messages";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -33,8 +34,7 @@ export async function main(argv: string[], terminal: Terminal, updater: Updater)
 async function run(argv: string[], terminal: Terminal, updater: Updater): Promise<number> {
   if (argv[0] === "update") {
     const autoUpdate = argv.includes("--yes") || argv.includes("-y");
-    await runUpdate(autoUpdate, terminal, updater);
-    return 0;
+    return runUpdate(autoUpdate, terminal, updater);
   }
 
   const options = parseArgs(argv);
@@ -139,28 +139,32 @@ async function runBatch(
   return summary.failureCount > 0 ? ExitCode.ConversionFailed : ExitCode.Success;
 }
 
-async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<void> {
+async function runUpdate(autoUpdate: boolean, terminal: Terminal, updater: Updater): Promise<ExitCode> {
   const version = currentVersion();
 
+  let latestVersion: string;
   try {
-    const latestVersion = await updater.latestVersion();
-
-    if (latestVersion === version) {
-      terminal.say(`You are running the latest version: ${version}`);
-    } else {
-      terminal.say(`Update available: ${version} -> ${latestVersion}`);
-
-      // Today's update prompt reuses the conversion confirmation wording.
-      const shouldUpdate = autoUpdate || (await terminal.confirm("Proceed with conversion?", true));
-      if (shouldUpdate) {
-        await install(latestVersion, terminal, updater);
-      } else {
-        terminal.say("Update cancelled.");
-      }
-    }
+    latestVersion = await updater.latestVersion();
   } catch (error) {
     terminal.error(`Error checking for updates: ${(error as Error).message}`);
+    return ExitCode.Success;
   }
+
+  if (latestVersion === version) {
+    terminal.say(`You are running the latest version: ${version}`);
+    return ExitCode.Success;
+  }
+
+  terminal.say(`Update available: ${version} -> ${latestVersion}`);
+
+  const shouldUpdate = autoUpdate || (await terminal.confirm(updatePromptText(version, latestVersion), true));
+  if (!shouldUpdate) {
+    terminal.say("Update cancelled.");
+    return ExitCode.Cancelled;
+  }
+
+  await install(latestVersion, terminal, updater);
+  return ExitCode.Success;
 }
 
 async function install(version: string, terminal: Terminal, updater: Updater): Promise<void> {

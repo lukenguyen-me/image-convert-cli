@@ -106,3 +106,8 @@ export function batchResultText(summary: BatchConversionSummary): string {
 
   return lines.join("\n");
 }
+
+/** The question asked before installing a newer version. */
+export function updatePromptText(currentVersion: string, latestVersion: string): string {
+  return `Update image-convert-cli ${currentVersion} → ${latestVersion}?`;
+}
