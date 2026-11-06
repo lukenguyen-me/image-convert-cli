@@ -77,7 +77,7 @@ export function conversionFailureText(result: ConversionResult): string {
 function skipReasonText(conversion: SkippedConversion, format: FormatSpelling): string {
   switch (conversion.skip) {
     case "same-format":
-      return `already ${findOutputFormat(format)?.label ?? format.toUpperCase()}`;
+      return `already ${findOutputFormat(format).label}`;
     case "output-exists":
       return `${conversion.output} already exists`;
   }

@@ -95,9 +95,9 @@ export function formatPromptChoices(): FormatPromptChoice[] {
   }));
 }
 
-/** The Output Format a spelling (name or Format Alias, any case) refers to. */
-export function findOutputFormat(spelling: string): OutputFormat | undefined {
-  return findDefinition(spelling);
+/** The Output Format a spelling (its name or a Format Alias) refers to. */
+export function findOutputFormat(spelling: FormatSpelling): OutputFormat {
+  return definitionOf(spelling);
 }
 
 /**
@@ -107,13 +107,10 @@ export function findOutputFormat(spelling: string): OutputFormat | undefined {
 export async function encode(
   sourcePath: string,
   destinationPath: string,
-  spelling: string,
+  spelling: FormatSpelling,
   options: { compress: boolean },
 ): Promise<void> {
-  const format = findDefinition(spelling);
-  if (!format) {
-    throw new Error(`Unknown output format: ${spelling}`);
-  }
+  const format = definitionOf(spelling);
   const inputFormat = findInputFormat(sourcePath);
   if (!inputFormat) {
     throw new Error(`Unsupported input format: ${path.basename(sourcePath)}`);
@@ -126,11 +123,11 @@ export async function encode(
   await format.write(image, destinationPath, options.compress);
 }
 
-function findDefinition(spelling: string): OutputFormatDefinition | undefined {
-  const wanted = spelling.toLowerCase();
+/** The Output Format with its encode recipe. Every FormatSpelling names exactly one. */
+function definitionOf(spelling: FormatSpelling): OutputFormatDefinition {
   return OUTPUT_FORMAT_TABLE.find(
-    (format: OutputFormatDefinition) => format.name === wanted || format.aliases.includes(wanted),
-  );
+    (format: OutputFormatDefinition) => format.name === spelling || format.aliases.includes(spelling),
+  )!;
 }
 
 /** An image format the tool can read. See GLOSSARY.md. */
@@ -159,9 +156,9 @@ export function findInputFormat(sourcePath: string): InputFormat | undefined {
 }
 
 /** Whether the source file is already in the Output Format that `spelling` refers to. */
-export function isSameFormat(sourcePath: string, spelling: string): boolean {
-  const target = findOutputFormat(spelling);
-  return target !== undefined && findOutputFormat(extensionOf(sourcePath)) === target;
+export function isSameFormat(sourcePath: string, spelling: FormatSpelling): boolean {
+  const extension = extensionOf(sourcePath);
+  return isFormatSpelling(extension) && definitionOf(extension) === definitionOf(spelling);
 }
 
 function extensionOf(filePath: string): string {

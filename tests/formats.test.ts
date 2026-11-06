@@ -9,8 +9,10 @@ import {
   findInputFormat,
   findOutputFormat,
   FORMAT_SPELLINGS,
+  type FormatSpelling,
   formatPromptChoices,
   INPUT_FORMATS,
+  isFormatSpelling,
   isSameFormat,
   OUTPUT_FORMATS,
 } from "../src/formats";
@@ -53,7 +55,13 @@ async function decodedFormat(file: string): Promise<string | undefined> {
 }
 
 /** One row per Output Format. Adding an Output Format means adding a row here. */
-const OUTPUT_FORMAT_TABLE = [
+const OUTPUT_FORMAT_TABLE: {
+  name: FormatSpelling;
+  label: string;
+  aliases: FormatSpelling[];
+  sameAs: string[];
+  differentFrom: string[];
+}[] = [
   { name: "webp", label: "WebP", aliases: [], sameAs: ["a.webp", "A.WEBP"], differentFrom: ["a.png", "a.jpg"] },
   { name: "jpeg", label: "JPEG", aliases: ["jpg"], sameAs: ["a.jpeg", "a.jpg", "a.JPG"], differentFrom: ["a.png", "a.webp"] },
   { name: "png", label: "PNG", aliases: [], sameAs: ["a.png"], differentFrom: ["a.jpg", "a.ico"] },
@@ -74,9 +82,9 @@ describe("Output Formats", () => {
         expect(format?.aliases).toEqual(row.aliases);
       });
 
-      it("is found by each alias, in any case", () => {
-        for (const spelling of [...row.aliases, row.name.toUpperCase()]) {
-          expect(findOutputFormat(spelling)?.name).toBe(row.name);
+      it("is found by each alias", () => {
+        for (const spelling of row.aliases) {
+          expect(findOutputFormat(spelling).name).toBe(row.name);
         }
       });
 
@@ -113,9 +121,9 @@ describe("Output Formats", () => {
     });
   }
 
-  it("does not find an unknown spelling", () => {
-    expect(findOutputFormat("bmp")).toBeUndefined();
-    expect(findOutputFormat("svg")).toBeUndefined();
+  it("does not accept an unknown spelling", () => {
+    expect(isFormatSpelling("bmp")).toBe(false);
+    expect(isFormatSpelling("svg")).toBe(false);
   });
 });
 
@@ -131,7 +139,7 @@ async function decodedSizes(file: string): Promise<number[][]> {
 
 describe("sizes", () => {
   /** What a 1000x500 SVG becomes in each Output Format: rasterised to fit 512x512 (ICO then embeds its own sizes). */
-  const SVG_SIZES: Record<string, number[][]> = {
+  const SVG_SIZES: Partial<Record<FormatSpelling, number[][]>> = {
     webp: [[512, 256]],
     jpeg: [[512, 256]],
     png: [[512, 256]],
@@ -142,7 +150,7 @@ describe("sizes", () => {
     expect(Object.keys(SVG_SIZES)).toEqual(OUTPUT_FORMATS.map((format) => format.name));
   });
 
-  for (const [name, sizes] of Object.entries(SVG_SIZES)) {
+  for (const [name, sizes] of Object.entries(SVG_SIZES) as [FormatSpelling, number[][]][]) {
     it(`rasterises SVG input to fit 512x512 when writing ${name}`, async () => {
       const source = writeSvg(`wide-${name}.svg`, 1000, 500);
       const destination = path.join(dir, `from-svg.${name}`);
