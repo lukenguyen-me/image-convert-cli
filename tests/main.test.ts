@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { main } from "../src/cli";
 import { CTRL_C, ScriptedTerminal } from "../src/scripted-terminal";
 import { InMemoryUpdater } from "../src/updater";
+import sharp from "sharp";
 import packageJson from "../package.json" with { type: "json" };
 
 const ONE_PIXEL_PNG = Buffer.from(
@@ -23,6 +24,7 @@ describe("main", () => {
       expect(terminal.stdout).toContain("Image Converter CLI");
       expect(terminal.stdout).toContain("imgc -y --source <path> --format <format>");
       expect(terminal.stdout).toContain("--format, -f     Target format: webp, jpeg, jpg, png, or ico");
+      expect(terminal.stdout).toContain("Input formats: jpeg, jpg, png, webp, gif, tiff, tif, avif, svg");
       expect(terminal.stderr).toBe("");
       expect(terminal.asked).toEqual([]);
     });
@@ -186,7 +188,7 @@ describe("main", () => {
       expect(terminal.asked).toEqual([]);
       expect(fs.existsSync(destination)).toBe(true);
       expect(terminal.stdout).toStartWith(
-        "Image Converter - Convert images between webp, jpeg, jpg, png, and svg\n\n" +
+        "Image Converter - Convert JPEG, PNG, WebP, GIF, TIFF, AVIF or SVG images to WebP, JPEG, PNG or ICO\n\n" +
           "\nConversion settings:\n" +
           `  Source: ${source}\n` +
           "  Target format: WEBP\n" +
@@ -240,6 +242,33 @@ describe("main", () => {
       expect(code).toBe(130);
       expect(fs.existsSync(destination)).toBe(false);
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
+    });
+
+    for (const spelling of ["jpeg", "jpg"]) {
+      it(`--format ${spelling} offers a .${spelling} destination and writes it`, async () => {
+        const source = path.join(dir, "photo.png");
+        const terminal = new ScriptedTerminal([""]);
+
+        const code = await main(["-y", "-s", source, "-f", spelling], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(terminal.asked).toEqual([`Destination path (${path.join(dir, `photo.${spelling}`)})`]);
+        expect((await sharp(path.join(dir, `photo.${spelling}`)).metadata()).format).toBe("jpeg");
+      });
+    }
+
+    it("a source that is not a known Input Format fails with an unsupported input format message", async () => {
+      const source = path.join(dir, "photo.bmp");
+      fs.copyFileSync(path.join(dir, "photo.png"), source);
+      const destination = path.join(dir, "photo.webp");
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", source, "-f", "webp", "-d", destination], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(1);
+      expect(terminal.stderr).toContain(`Unsupported input format: ${source}`);
+      expect(terminal.asked).toEqual([]);
+      expect(fs.existsSync(destination)).toBe(false);
     });
 
     it("writes nothing and exits 130 when the user presses Ctrl-C at a prompt", async () => {
@@ -345,6 +374,21 @@ describe("main", () => {
       expect(code).toBe(1);
       expect(terminal.stdout).toContain("  Total files: 2\n  Converted: 1\n  Failed: 1\n");
       expect(terminal.stdout).toContain(`\nFailed files:\n  - ${broken}: `);
+    });
+
+    it("converts GIF, TIFF and AVIF sources", async () => {
+      for (const name of ["anim.gif", "scan.tif", "photo2.avif"]) {
+        const format = path.extname(name).slice(1) as keyof sharp.FormatEnum;
+        await sharp({ create: { width: 4, height: 4, channels: 3, background: "#3c3" } })
+          .toFormat(format)
+          .toFile(path.join(source, name));
+      }
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", source, "-f", "png", "-d", output], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readdirSync(output).sort()).toEqual(["anim.png", "photo2.png", "scan.png"]);
     });
 
     it("an Unattended Run honours --dest", async () => {

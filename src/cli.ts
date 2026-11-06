@@ -1,4 +1,5 @@
-import type { BatchConversionSettings, ConvertOptions, SupportedFormat } from "./types";
+import type { BatchConversionSettings, ConvertOptions } from "./types";
+import { type FormatSpelling, findInputFormat, isFormatSpelling } from "./formats";
 import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
@@ -11,6 +12,7 @@ import {
   conversionFailureText,
   conversionSuccessText,
   settingsText,
+  unsupportedInputFormatText,
   updatePromptText,
 } from "./messages";
 import packageJson from "../package.json" with { type: "json" };
@@ -62,9 +64,16 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
   terminal.say(BANNER);
 
   const sourcePath = options.source || (await terminal.askSourcePath());
+  const sourceIsDirectory = isDirectory(sourcePath);
+
+  if (!sourceIsDirectory && !findInputFormat(sourcePath)) {
+    terminal.error(unsupportedInputFormatText(sourcePath));
+    return ExitCode.ConversionFailed;
+  }
+
   const targetFormat = options.format || (await terminal.askFormat());
 
-  if (isDirectory(sourcePath)) {
+  if (sourceIsDirectory) {
     return runBatch(sourcePath, targetFormat, options, terminal);
   }
 
@@ -103,7 +112,7 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
 
 async function runBatch(
   sourceDir: string,
-  targetFormat: SupportedFormat,
+  targetFormat: FormatSpelling,
   options: ConvertOptions,
   terminal: Terminal,
 ): Promise<ExitCode> {
@@ -202,8 +211,8 @@ function parseArgs(args: string[]): ConvertOptions {
     } else if (arg === "--source" || arg === "-s") {
       options.source = args[++i];
     } else if (arg === "--format" || arg === "-f") {
-      const format = args[++i] as SupportedFormat | undefined;
-      if (format && ["webp", "jpeg", "jpg", "png", "ico"].includes(format)) {
+      const format = args[++i];
+      if (format && isFormatSpelling(format)) {
         options.format = format;
       }
     } else if (arg === "--dest" || arg === "-d") {

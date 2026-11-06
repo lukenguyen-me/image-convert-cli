@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
-import type { SupportedFormat } from "./types";
+import { type FormatSpelling, formatPromptChoices } from "./formats";
 
 export type OutputStream = "stdout" | "stderr";
 
@@ -24,7 +24,7 @@ export interface Terminal {
   /** Ask for the source file or directory. */
   askSourcePath(): Promise<string>;
   /** Ask which Output Format to convert to. */
-  askFormat(): Promise<SupportedFormat>;
+  askFormat(): Promise<FormatSpelling>;
   /** Ask for the output file path; an empty answer takes `defaultPath`. */
   askDestination(defaultPath: string): Promise<string>;
   /** Ask for the output directory of a Batch; an empty answer takes `defaultDir`. */
@@ -138,16 +138,14 @@ export class InteractiveTerminal implements Terminal {
     });
   }
 
-  async askFormat(): Promise<SupportedFormat> {
-    return cancellable(select<SupportedFormat>({
+  async askFormat(): Promise<FormatSpelling> {
+    return cancellable(select<FormatSpelling>({
       message: "Target format:",
-      choices: [
-        { value: "webp", description: "WebP format (recommended for web)" },
-        { value: "jpeg", description: "JPEG format" },
-        { value: "jpg", description: "JPG format" },
-        { value: "png", description: "PNG format (lossless)" },
-        { value: "ico", description: "ICO format (favicon, embeds 32x32 and 16x16)" },
-      ],
+      choices: formatPromptChoices().map((choice) => ({
+        value: choice.spelling,
+        name: choice.label,
+        description: choice.description,
+      })),
     }));
   }
 

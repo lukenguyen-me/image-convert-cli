@@ -1,5 +1,5 @@
 import { PromptCancelled, type OutputStream, type Terminal } from "./terminal";
-import type { SupportedFormat } from "./types";
+import type { FormatSpelling } from "./formats";
 
 /** Queue this in place of an answer to press Ctrl-C at that question. */
 export const CTRL_C = Symbol("Ctrl-C");
@@ -35,8 +35,8 @@ export class ScriptedTerminal implements Terminal {
     return this.nextString("Source file path");
   }
 
-  async askFormat(): Promise<SupportedFormat> {
-    return this.nextString("Target format") as SupportedFormat;
+  async askFormat(): Promise<FormatSpelling> {
+    return this.nextString("Target format") as FormatSpelling;
   }
 
   async askDestination(defaultPath: string): Promise<string> {

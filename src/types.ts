@@ -1,11 +1,13 @@
-export type SupportedFormat = "webp" | "jpeg" | "jpg" | "png" | "ico";
+import type { FormatSpelling } from "./formats";
+
+export type { FormatSpelling } from "./formats";
 
 export type ConvertOptions = {
   help?: boolean;
   version?: boolean;
   yes?: boolean;
   source?: string;
-  format?: SupportedFormat;
+  format?: FormatSpelling;
   destination?: string;
   compress?: boolean;
 };
@@ -22,7 +24,7 @@ export type ConversionResult = {
 
 export type ConversionSettings = {
   sourcePath: string;
-  targetFormat: SupportedFormat;
+  targetFormat: FormatSpelling;
   destinationPath: string;
   compress: boolean;
 };
@@ -39,7 +41,7 @@ export type BatchConversionResult = {
 
 export type BatchConversionSettings = {
   sourceDir: string;
-  targetFormat: SupportedFormat;
+  targetFormat: FormatSpelling;
   destinationDir: string;
   compress: boolean;
   yesMode: boolean;

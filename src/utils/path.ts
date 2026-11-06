@@ -1,10 +1,10 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import type { SupportedFormat } from "../types";
+import { type FormatSpelling, findInputFormat } from "../formats";
 
 export function getDefaultDestinationPath(
   sourcePath: string,
-  format: SupportedFormat,
+  format: FormatSpelling,
 ): string {
   const parsed = path.parse(sourcePath);
   return path.join(parsed.dir, `${parsed.name}.${format}`);
@@ -18,30 +18,13 @@ export function isDirectory(sourcePath: string): boolean {
   }
 }
 
-export function getExtension(filePath: string): string {
-  const ext = path.extname(filePath);
-  return ext.length > 0 ? ext.slice(1).toLowerCase() : "";
-}
-
-export function isSameFormat(sourcePath: string, targetFormat: SupportedFormat): boolean {
-  const ext = getExtension(sourcePath);
-  if (ext === targetFormat) return true;
-  // Handle jpeg/jpg equivalence
-  if ((ext === "jpeg" || ext === "jpg") && (targetFormat === "jpeg" || targetFormat === "jpg")) {
-    return true;
-  }
-  return false;
-}
-
-export const INPUT_FORMATS = ["webp", "jpeg", "jpg", "png", "svg"];
-
 export function getImageFilesFromDirectory(dirPath: string): string[] {
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isFile())
       .map((entry) => path.join(dirPath, entry.name))
-      .filter((filePath) => INPUT_FORMATS.includes(getExtension(filePath)));
+      .filter((filePath) => findInputFormat(filePath) !== undefined);
   } catch {
     return [];
   }

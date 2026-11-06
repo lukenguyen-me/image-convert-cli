@@ -2,8 +2,6 @@ import { expect, describe, it } from "bun:test";
 import {
   getDefaultDestinationPath,
   isDirectory,
-  getExtension,
-  isSameFormat,
   getImageFilesFromDirectory,
   ensureDirectoryExists,
 } from "../../src/utils/path";
@@ -69,69 +67,20 @@ describe("isDirectory", () => {
   });
 
   it("should return false for file path", () => {
-    const sourcePath = path.join(__dirname, "fixtures", "test.jpg");
-    const fixtureDir = path.join(__dirname, "fixtures");
+    const testDir = path.join(__dirname, "fixtures", "test_is_file");
+    fs.mkdirSync(testDir, { recursive: true });
+    const file = path.join(testDir, "photo.jpg");
+    fs.writeFileSync(file, "");
 
-    if (!fs.existsSync(fixtureDir)) {
-      fs.mkdirSync(fixtureDir, { recursive: true });
-    }
-
-    // Use example image if fixture doesn't exist
-    const actualSource = fs.existsSync(sourcePath)
-      ? sourcePath
-      : path.join(__dirname, "..", "..", "example", "picture-1.jpg");
-
-    if (fs.existsSync(actualSource)) {
-      expect(isDirectory(actualSource)).toBe(false);
+    try {
+      expect(isDirectory(file)).toBe(false);
+    } finally {
+      fs.rmSync(testDir, { recursive: true });
     }
   });
 
   it("should return false for non-existent path", () => {
     expect(isDirectory("/non/existent/path")).toBe(false);
-  });
-});
-
-describe("getExtension", () => {
-  it("should return lowercase extension without dot", () => {
-    expect(getExtension("/path/to/image.jpg")).toBe("jpg");
-  });
-
-  it("should return empty string for no extension", () => {
-    expect(getExtension("/path/to/myfile")).toBe("");
-  });
-
-  it("should handle uppercase extensions", () => {
-    expect(getExtension("/path/to/image.PNG")).toBe("png");
-  });
-
-  it("should handle mixed case extensions", () => {
-    expect(getExtension("/path/to/image.WebP")).toBe("webp");
-  });
-});
-
-describe("isSameFormat", () => {
-  it("should return true for matching extensions", () => {
-    expect(isSameFormat("/path/to/image.jpg", "jpg")).toBe(true);
-    expect(isSameFormat("/path/to/image.png", "png")).toBe(true);
-    expect(isSameFormat("/path/to/image.webp", "webp")).toBe(true);
-  });
-
-  it("should return true for ico format", () => {
-    expect(isSameFormat("/path/to/image.ico", "ico")).toBe(true);
-  });
-
-  it("should return false when ico source targets different format", () => {
-    expect(isSameFormat("/path/to/image.ico", "png")).toBe(false);
-  });
-
-  it("should return true for jpeg/jpg equivalence", () => {
-    expect(isSameFormat("/path/to/image.jpeg", "jpg")).toBe(true);
-    expect(isSameFormat("/path/to/image.jpg", "jpeg")).toBe(true);
-  });
-
-  it("should return false for different formats", () => {
-    expect(isSameFormat("/path/to/image.jpg", "png")).toBe(false);
-    expect(isSameFormat("/path/to/image.png", "webp")).toBe(false);
   });
 });
 
@@ -153,6 +102,21 @@ describe("getImageFilesFromDirectory", () => {
         "image2.png",
         "image3.webp",
       ]);
+    } finally {
+      fs.rmSync(testDir, { recursive: true });
+    }
+  });
+
+  it("should return files of every Input Format, including GIF, TIFF and AVIF", () => {
+    const testDir = path.join(__dirname, "fixtures", "test_images_all");
+    fs.mkdirSync(testDir, { recursive: true });
+    const names = ["a.jpeg", "b.jpg", "c.png", "d.webp", "e.gif", "f.tiff", "g.tif", "h.avif", "i.svg"];
+    for (const name of names) fs.writeFileSync(path.join(testDir, name), "");
+    fs.writeFileSync(path.join(testDir, "j.bmp"), "");
+
+    try {
+      const files = getImageFilesFromDirectory(testDir);
+      expect(files.map((f) => path.basename(f)).sort()).toEqual(names);
     } finally {
       fs.rmSync(testDir, { recursive: true });
     }
