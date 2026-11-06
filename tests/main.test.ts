@@ -665,5 +665,49 @@ describe("main", () => {
       expect(terminal.stdout).toContain("  Converted: 1\n  Failed: 0\n  Skipped: 1\n");
       expect(terminal.stdout).toContain(`\nSkipped files:\n  - ${already}: already WebP\n`);
     });
+
+    it("a single-file run re-encodes a same-format source to <name>.converted.<ext>, never over the source", async () => {
+      const source = await writeImage("photo.png");
+      const before = fs.readFileSync(source);
+      const terminal = new ScriptedTerminal();
+
+      const code = await main(["-y", "-s", source, "-f", "png", "-c"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(fs.readFileSync(source)).toEqual(before);
+      expect(await formatOf(path.join(dir, "photo.converted.png"))).toBe("png");
+      expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "photo.converted.png")}\n`);
+    });
+
+    it("an interactive same-format run offers <name>.converted.<ext> as the destination", async () => {
+      const source = await writeImage("photo.jpg");
+      const terminal = new ScriptedTerminal(["", false, true]);
+
+      const code = await main(["-s", source, "-f", "jpg"], terminal, new InMemoryUpdater());
+
+      expect(code).toBe(0);
+      expect(terminal.asked[0]).toBe(`Destination path (${path.join(dir, "photo.converted.jpg")})`);
+      expect(fs.readdirSync(dir).sort()).toEqual(["photo.converted.jpg", "photo.jpg"]);
+    });
+
+    for (const destination of ["photo.png", "./photo.png"]) {
+      it(`--dest equal to the source (${destination}) is refused with exit 2`, async () => {
+        const source = await writeImage("photo.png");
+        const before = fs.readFileSync(source);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(
+          ["-y", "-s", source, "-f", "png", "-d", path.join(dir, destination)],
+          terminal,
+          new InMemoryUpdater(),
+        );
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination is the source file ${source}; choose another output path`);
+        expect(terminal.stderr).toEndWith("Run 'imgc --help' for usage.\n");
+        expect(fs.readFileSync(source)).toEqual(before);
+        expect(fs.readdirSync(dir)).toEqual(["photo.png"]);
+      });
+    }
   });
 });

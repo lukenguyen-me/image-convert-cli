@@ -1,10 +1,11 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type ConvertRequest, UsageError } from "./command";
 import { type FormatSpelling, findInputFormat } from "./formats";
 import type { Terminal } from "./terminal";
 import { unsupportedInputFormatText } from "./messages";
-import { getDefaultDestinationPath, isDirectory } from "./utils/path";
+import { defaultOutputPath } from "./plan";
 
 /** Complete convert settings: every field the run needs, after the fill-in step. */
 export type ConvertSettings = {
@@ -42,7 +43,7 @@ export async function fillIn(request: ConvertRequest, terminal: Terminal): Promi
 
   const format = request.format ?? (await ask("--format", () => terminal.askFormat()));
 
-  const defaultDestination = sourceIsDirectory ? source : getDefaultDestinationPath(source, format);
+  const defaultDestination = sourceIsDirectory ? source : defaultOutputPath(source, format);
   const destination = expandHome(
     request.destination ??
       (await ask(
@@ -72,4 +73,12 @@ export function expandHome(filePath: string): string {
   }
   const home = process.env.HOME || os.homedir();
   return path.join(home, filePath.slice(1));
+}
+
+function isDirectory(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isDirectory();
+  } catch {
+    return false;
+  }
 }

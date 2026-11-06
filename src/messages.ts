@@ -70,6 +70,11 @@ export function skipReasonText(conversion: Conversion, format: FormatSpelling): 
   }
 }
 
+/** The report for a single-file Conversion that was skipped. */
+export function conversionSkippedText(conversion: Conversion, format: FormatSpelling): string {
+  return `\nSkipped ${conversion.source}: ${skipReasonText(conversion, format)}`;
+}
+
 /** The result summary of a Batch. */
 export function batchResultText(summary: RunSummary): string {
   const converted = summary.results.filter((result) => result.success);
