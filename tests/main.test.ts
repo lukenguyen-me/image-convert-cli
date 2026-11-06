@@ -220,14 +220,14 @@ describe("main", () => {
       expect(terminal.stdout).toContain("  Compression: No\n");
     });
 
-    it("writes nothing when the user declines to proceed", async () => {
+    it("writes nothing and exits 130 when the user declines to proceed", async () => {
       const source = path.join(dir, "photo.png");
       const destination = path.join(dir, "declined.webp");
       const terminal = new ScriptedTerminal([false, false]);
 
       const code = await main(["-s", source, "-f", "webp", "-d", destination], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(fs.existsSync(destination)).toBe(false);
       expect(terminal.stdout).toEndWith("Conversion cancelled.\n");
     });
@@ -278,12 +278,12 @@ describe("main", () => {
       expect(terminal.stdout).toContain(`\nOutput directory: ${output}\n`);
     });
 
-    it("writes nothing when the user declines", async () => {
+    it("writes nothing and exits 130 when the user declines", async () => {
       const terminal = new ScriptedTerminal([output, false, false]);
 
       const code = await main(["-s", source, "-f", "webp"], terminal, new InMemoryUpdater());
 
-      expect(code).toBe(0);
+      expect(code).toBe(130);
       expect(fs.readdirSync(output)).toEqual([]);
       expect(terminal.stdout).toEndWith("Batch conversion cancelled.\n");
     });

@@ -77,7 +77,7 @@ async function runConvert(options: ConvertOptions, terminal: Terminal): Promise<
 
   if (!shouldProceed) {
     terminal.say("Conversion cancelled.");
-    return 0;
+    return ExitCode.Cancelled;
   }
 
   const result = await convertImage(sourcePath, destinationPath, targetFormat, compress);
@@ -111,7 +111,7 @@ async function runBatch(
     const shouldProceed = await terminal.confirm(`Convert ${files.length} files?`, true);
     if (!shouldProceed) {
       terminal.say("Batch conversion cancelled.");
-      return ExitCode.Success;
+      return ExitCode.Cancelled;
     }
   }
 
