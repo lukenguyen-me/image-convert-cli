@@ -1,4 +1,4 @@
-import { expect, describe, it, beforeAll, afterAll } from "bun:test";
+import { expect, describe, it, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -15,13 +15,14 @@ import {
   OUTPUT_FORMATS,
 } from "../src/formats";
 
+// A fresh temp directory per test, removed even when an assertion fails.
 let dir: string;
 
-beforeAll(() => {
+beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "imgc-formats-"));
 });
 
-afterAll(() => {
+afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
