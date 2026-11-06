@@ -16,6 +16,9 @@ export type Conversion = {
   outputExists?: boolean;
 };
 
+/** A Conversion that won't run, and why. */
+export type SkippedConversion = Conversion & { skip: SkipReason };
+
 /** Every Conversion in one run, worked out before any file is written. See GLOSSARY.md. */
 export type ConversionPlan = {
   /** Whether the source is a directory. */
@@ -36,9 +39,19 @@ export function planConversions(settings: ConvertSettings): ConversionPlan {
   return plan;
 }
 
+/** The Conversions that will run. */
+export function runnableConversions(plan: ConversionPlan): Conversion[] {
+  return plan.conversions.filter((conversion) => !conversion.skip);
+}
+
+/** The Conversions that won't run, each with its reason. */
+export function skippedConversions(plan: ConversionPlan): SkippedConversion[] {
+  return plan.conversions.filter((conversion): conversion is SkippedConversion => conversion.skip !== undefined);
+}
+
 /** The Conversions that will run but would replace an existing file. */
 export function existingOutputs(plan: ConversionPlan): Conversion[] {
-  return plan.conversions.filter((conversion) => !conversion.skip && conversion.outputExists);
+  return runnableConversions(plan).filter((conversion) => conversion.outputExists);
 }
 
 /** Skip every Conversion that would replace an existing file. */

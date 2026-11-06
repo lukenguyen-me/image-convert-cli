@@ -1,5 +1,5 @@
 import type { FormatSpelling } from "./formats";
-import type { Conversion } from "./plan";
+import type { SkippedConversion } from "./plan";
 
 export type { FormatSpelling } from "./formats";
 
@@ -21,6 +21,6 @@ export type RunSummary = {
   /** Every Conversion in the plan, run or skipped. */
   totalFiles: number;
   results: ConversionResult[];
-  skipped: Conversion[];
+  skipped: SkippedConversion[];
   totalElapsed: number;
 };

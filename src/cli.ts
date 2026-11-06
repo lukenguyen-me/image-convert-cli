@@ -4,7 +4,14 @@ import { PromptCancelled, type Terminal } from "./terminal";
 import type { Updater } from "./updater";
 import { ExitCode } from "./exit-codes";
 import { convertImage } from "./converter";
-import { type ConversionPlan, existingOutputs, planConversions, skipExistingOutputs } from "./plan";
+import {
+  type ConversionPlan,
+  existingOutputs,
+  planConversions,
+  runnableConversions,
+  skipExistingOutputs,
+  skippedConversions,
+} from "./plan";
 import { HELP_TEXT, UsageError, parseCommand } from "./command";
 import { type ConvertSettings, fillIn } from "./settings";
 import {
@@ -82,7 +89,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     }
   }
 
-  const toRun = plan.conversions.filter((conversion) => !conversion.skip);
+  const toRun = runnableConversions(plan);
 
   if (!settings.unattended && toRun.length > 0) {
     const question = plan.batch ? `Convert ${toRun.length} files?` : "Proceed with conversion?";
@@ -105,7 +112,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
     outputDirectory: plan.outputDirectory,
     totalFiles: plan.conversions.length,
     results,
-    skipped: plan.conversions.filter((conversion) => conversion.skip),
+    skipped: skippedConversions(plan),
     totalElapsed: Date.now() - startTime,
   };
   report(summary, plan.batch, terminal);
