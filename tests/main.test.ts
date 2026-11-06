@@ -627,7 +627,7 @@ describe("main", () => {
     /** Write a small real image in the format its extension names. */
     async function writeImage(name: string): Promise<string> {
       const filePath = path.join(dir, name);
-      const format = path.extname(name).slice(1).replace("jpg", "jpeg") as keyof sharp.FormatEnum;
+      const format = path.extname(name).slice(1).toLowerCase().replace("jpg", "jpeg") as keyof sharp.FormatEnum;
       await sharp({ create: { width: 4, height: 4, channels: 3, background: "#36c" } })
         .toFormat(format)
         .toFile(filePath);
@@ -843,6 +843,63 @@ describe("main", () => {
       expect(fs.readFileSync(source)).toEqual(before);
       expect(await formatOf(path.join(dir, "photo.converted.png"))).toBe("png");
       expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "photo.converted.png")}\n`);
+    });
+
+    describe("paths that differ only in case name the same file", () => {
+      for (const flags of [[], ["--overwrite"]]) {
+        it(`a same-format source with an upper-case extension writes <name>.converted.<ext> (${flags.join(" ") || "no flags"})`, async () => {
+          const source = await writeImage("single.PNG");
+          const before = fs.readFileSync(source);
+          const terminal = new ScriptedTerminal();
+
+          const code = await main(["-y", ...flags, "-s", source, "-f", "png", "-c"], terminal, new InMemoryUpdater());
+
+          expect(code).toBe(0);
+          expect(fs.readFileSync(source)).toEqual(before);
+          expect(fs.readdirSync(dir).sort()).toEqual(["single.PNG", "single.converted.png"]);
+          expect(terminal.stdout).toContain(`\nOutput saved to: ${path.join(dir, "single.converted.png")}\n`);
+        });
+      }
+
+      it("--dest differing from the source only in case is refused with exit 2", async () => {
+        const source = await writeImage("photo.png");
+        const before = fs.readFileSync(source);
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(
+          ["-y", "--overwrite", "-s", source, "-f", "png", "-d", path.join(dir, "PHOTO.PNG")],
+          terminal,
+          new InMemoryUpdater(),
+        );
+
+        expect(code).toBe(2);
+        expect(terminal.stderr).toContain(`the destination is the source file ${source}`);
+        expect(fs.readFileSync(source)).toEqual(before);
+      });
+
+      it("a Batch treats output names that differ only in case as a collision", async () => {
+        await writeImage("Photo.png");
+        await writeImage("photo.jpg");
+        const terminal = new ScriptedTerminal();
+
+        const code = await main(["-y", "-s", dir, "-f", "webp"], terminal, new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readdirSync(dir).sort()).toEqual(["Photo.png", "Photo.png.webp", "photo.jpg", "photo.jpg.webp"]);
+        expect(terminal.stdout).toContain("  Converted: 2\n  Failed: 0\n  Skipped: 0\n");
+      });
+
+      it("a Batch never writes over a source whose name differs only in case", async () => {
+        await writeImage("photo.png");
+        const already = await writeImage("PHOTO.WEBP");
+        const before = fs.readFileSync(already);
+
+        const code = await main(["-y", "--overwrite", "-s", dir, "-f", "webp"], new ScriptedTerminal(), new InMemoryUpdater());
+
+        expect(code).toBe(0);
+        expect(fs.readFileSync(already)).toEqual(before);
+        expect(fs.readdirSync(dir).sort()).toEqual(["PHOTO.WEBP", "photo.png", "photo.png.webp"]);
+      });
     });
 
     it("an interactive same-format run offers <name>.converted.<ext> as the destination", async () => {

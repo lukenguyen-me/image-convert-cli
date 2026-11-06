@@ -80,12 +80,12 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
   // Sources that would share an output name keep their source extension: photo.png → photo.png.webp.
   // So does a source whose output would land on another source, such as a skipped photo.webp.
   const runnable = conversions.filter((conversion) => !conversion.skip);
-  const counts = new Map<string, number>(sources.map((source) => [path.resolve(source), 1]));
+  const counts = new Map<string, number>(sources.map((source) => [pathKey(source), 1]));
   for (const { output } of runnable) {
-    counts.set(path.resolve(output), (counts.get(path.resolve(output)) ?? 0) + 1);
+    counts.set(pathKey(output), (counts.get(pathKey(output)) ?? 0) + 1);
   }
   for (const conversion of runnable) {
-    if (counts.get(path.resolve(conversion.output))! > 1) {
+    if (counts.get(pathKey(conversion.output))! > 1) {
       conversion.output = outputPath(destination, path.basename(conversion.source), format);
     }
   }
@@ -94,7 +94,16 @@ function planBatch(settings: ConvertSettings): ConversionPlan {
 }
 
 function isSamePath(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b);
+  return pathKey(a) === pathKey(b);
+}
+
+/**
+ * What identifies a file for the source guard and collision checks. Case is ignored,
+ * because the default macOS and Windows filesystems treat `Photo.png` and `photo.png`
+ * as one file. On a case-sensitive filesystem this only errs on the safe side.
+ */
+function pathKey(filePath: string): string {
+  return path.resolve(filePath).toLowerCase();
 }
 
 function outputPath(directory: string, stem: string, format: FormatSpelling): string {
