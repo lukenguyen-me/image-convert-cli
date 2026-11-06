@@ -100,7 +100,7 @@ describe("Output Formats", () => {
           const source = await makeImage(`source-${row.name}-${compress}.png`);
           const destination = path.join(dir, `out-${row.name}-${compress}.${row.name}`);
 
-          await encode(source, destination, row.name, { compress });
+          await encode(source, destination, { format: row.name, compress });
 
           expect(await decodedFormat(destination)).toBe(row.name);
         });
@@ -112,8 +112,8 @@ describe("Output Formats", () => {
           const byName = path.join(dir, `by-name.${row.name}`);
           const byAlias = path.join(dir, `by-alias.${alias}`);
 
-          await encode(source, byName, row.name, { compress: false });
-          await encode(source, byAlias, alias, { compress: false });
+          await encode(source, byName, { format: row.name, compress: false });
+          await encode(source, byAlias, { format: alias, compress: false });
 
           expect(fs.readFileSync(byAlias).equals(fs.readFileSync(byName))).toBe(true);
         });
@@ -155,7 +155,7 @@ describe("sizes", () => {
       const source = writeSvg(`wide-${name}.svg`, 1000, 500);
       const destination = path.join(dir, `from-svg.${name}`);
 
-      await encode(source, destination, name, { compress: false });
+      await encode(source, destination, { format: name, compress: false });
 
       expect(await decodedSizes(destination)).toEqual(sizes);
     });
@@ -165,7 +165,7 @@ describe("sizes", () => {
     const source = await makeImage("raster-size.png", 1000, 500);
     const destination = path.join(dir, "raster-size.webp");
 
-    await encode(source, destination, "webp", { compress: false });
+    await encode(source, destination, { format: "webp", compress: false });
 
     expect(await decodedSizes(destination)).toEqual([[1000, 500]]);
   });
@@ -174,7 +174,7 @@ describe("sizes", () => {
     const source = await makeImage("square.png", 100, 100);
     const destination = path.join(dir, "square.ico");
 
-    await encode(source, destination, "ico", { compress: false });
+    await encode(source, destination, { format: "ico", compress: false });
 
     expect(await decodedSizes(destination)).toEqual([[32, 32], [16, 16]]);
   });
@@ -206,7 +206,7 @@ describe("Input Formats", () => {
         expect(findInputFormat(source)?.label).toBe(row.label);
         expect(findInputFormat(source.toUpperCase())?.label).toBe(row.label);
 
-        await encode(source, destination, "png", { compress: false });
+        await encode(source, destination, { format: "png", compress: false });
         expect(await decodedFormat(destination)).toBe("png");
       });
     }
@@ -222,7 +222,7 @@ describe("Input Formats", () => {
     const source = path.join(dir, "photo.bmp");
     fs.copyFileSync(await makeImage("real.png"), source);
 
-    await expect(encode(source, path.join(dir, "photo.webp"), "webp", { compress: false })).rejects.toThrow(
+    await expect(encode(source, path.join(dir, "photo.webp"), { format: "webp", compress: false })).rejects.toThrow(
       "Unsupported input format",
     );
   });

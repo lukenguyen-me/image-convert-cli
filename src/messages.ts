@@ -64,7 +64,7 @@ export function conversionSuccessText(result: ConversionResult): string {
     `  Output size: ${formatBytes(result.outputSize)}`,
   ];
   lines.push(...savedLine(result.originalSize, result.outputSize));
-  lines.push(`\nOutput saved to: ${result.destinationPath}`);
+  lines.push(`\nOutput saved to: ${result.output}`);
   return lines.join("\n");
 }
 
@@ -110,7 +110,7 @@ export function batchResultText(summary: RunSummary): string {
   if (failed.length > 0) {
     lines.push("\nFailed files:");
     for (const result of failed) {
-      lines.push(`  - ${result.sourcePath}: ${result.error}`);
+      lines.push(`  - ${result.source}: ${result.error}`);
     }
   }
 

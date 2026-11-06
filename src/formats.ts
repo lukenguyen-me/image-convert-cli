@@ -100,27 +100,28 @@ export function findOutputFormat(spelling: FormatSpelling): OutputFormat {
   return definitionOf(spelling);
 }
 
+/** How to encode: the Output Format (by the spelling the user chose) and whether to Compress. */
+export interface EncodeOptions {
+  readonly format: FormatSpelling;
+  readonly compress: boolean;
+}
+
 /**
- * Encode the image at `sourcePath` into the Output Format that `spelling` refers to,
- * writing `destinationPath`. A Format Alias encodes exactly as the canonical name does.
+ * Encode the image at `source` into `options.format`, writing `output`.
+ * A Format Alias encodes exactly as the canonical name does.
  */
-export async function encode(
-  sourcePath: string,
-  destinationPath: string,
-  spelling: FormatSpelling,
-  options: { compress: boolean },
-): Promise<void> {
-  const format = definitionOf(spelling);
-  const inputFormat = findInputFormat(sourcePath);
+export async function encode(source: string, output: string, options: EncodeOptions): Promise<void> {
+  const format = definitionOf(options.format);
+  const inputFormat = findInputFormat(source);
   if (!inputFormat) {
-    throw new Error(`Unsupported input format: ${path.basename(sourcePath)}`);
+    throw new Error(`Unsupported input format: ${path.basename(source)}`);
   }
-  let image = sharp(sourcePath);
+  let image = sharp(source);
   if (inputFormat.name === "svg") {
     // SVG has no pixel size of its own worth keeping: rasterise it to fit 512x512.
     image = image.resize(512, 512, { fit: "inside" });
   }
-  await format.write(image, destinationPath, options.compress);
+  await format.write(image, output, options.compress);
 }
 
 /** The Output Format with its encode recipe. Every FormatSpelling names exactly one. */

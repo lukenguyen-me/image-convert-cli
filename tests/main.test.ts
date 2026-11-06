@@ -578,8 +578,8 @@ describe("main", () => {
         await writeGradientPng(path.join(dir, "in", name));
       }
       // Reference outputs, made by the Output Format module's own WebP recipe.
-      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "compressed.webp"), "webp", { compress: true });
-      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "plain.webp"), "webp", { compress: false });
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "compressed.webp"), { format: "webp", compress: true });
+      await encode(path.join(dir, "in", "a.png"), path.join(dir, "ref", "plain.webp"), { format: "webp", compress: false });
       compressed = fs.readFileSync(path.join(dir, "ref", "compressed.webp"));
       plain = fs.readFileSync(path.join(dir, "ref", "plain.webp"));
       expect(compressed.equals(plain)).toBe(false);

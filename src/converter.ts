@@ -1,34 +1,31 @@
 import * as fs from "node:fs";
-import { type FormatSpelling, encode } from "./formats";
+import { type EncodeOptions, encode } from "./formats";
+import type { Conversion } from "./plan";
 import type { ConversionResult } from "./types";
 
-/** Run one Conversion: encode `sourcePath` into `destinationPath` and measure it. */
-export async function convertImage(
-  sourcePath: string,
-  destinationPath: string,
-  format: FormatSpelling,
-  compress: boolean,
-): Promise<ConversionResult> {
+/** Run one Conversion: encode its source into its output and measure it. */
+export async function convertImage(conversion: Conversion, options: EncodeOptions): Promise<ConversionResult> {
+  const { source, output } = conversion;
   const startTime = Date.now();
 
   try {
-    const originalSize = fs.statSync(sourcePath).size;
+    const originalSize = fs.statSync(source).size;
 
-    await encode(sourcePath, destinationPath, format, { compress });
+    await encode(source, output, options);
 
     return {
       success: true,
-      sourcePath,
-      destinationPath,
+      source,
+      output,
       originalSize,
-      outputSize: fs.statSync(destinationPath).size,
+      outputSize: fs.statSync(output).size,
       elapsed: Date.now() - startTime,
     };
   } catch (error) {
     return {
       success: false,
-      sourcePath,
-      destinationPath,
+      source,
+      output,
       originalSize: 0,
       outputSize: 0,
       elapsed: Date.now() - startTime,

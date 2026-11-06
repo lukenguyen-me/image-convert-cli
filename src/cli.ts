@@ -104,7 +104,7 @@ async function runConvert(settings: ConvertSettings, terminal: Terminal): Promis
   }
   const results: ConversionResult[] = [];
   for (const conversion of toRun) {
-    results.push(await convertImage(conversion.source, conversion.output, settings.format, settings.compress));
+    results.push(await convertImage(conversion, settings));
   }
 
   const summary: RunSummary = {

@@ -4,8 +4,8 @@ import type { SkippedConversion } from "./plan";
 /** The outcome of one Conversion that ran, in a single-file run or a Batch. */
 export type ConversionResult = {
   success: boolean;
-  sourcePath: string;
-  destinationPath: string;
+  source: string;
+  output: string;
   originalSize: number;
   outputSize: number;
   elapsed: number;
